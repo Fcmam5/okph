@@ -8,6 +8,10 @@ export interface RenderOptions {
    * (e.g. a GitHub blob URL). When omitted, links are relative doc paths.
    */
   readonly baseUrl?: string;
+  /**
+   * Bypass the 500 node/edge safety limit.
+   */
+  readonly allowLarge?: boolean;
 }
 
 /**

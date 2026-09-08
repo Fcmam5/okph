@@ -5,11 +5,12 @@ import { generateMermaid } from "../src/index.js";
 const USAGE = `okph - generate a Mermaid graph of a markdown knowledge base
 
 Usage:
-  okph graph <path> [--base-url <url>]
+  okph graph <path> [--base-url <url>] [--allow-large]
 
 Options:
   --base-url <url>  Emit absolute click links joined onto <url>.
                     Omit for relative links (GitHub/GitLab rendered markdown).
+  --allow-large     Bypass the 500 node/edge limit and render anyway.
   -h, --help        Show this help.
 `;
 
@@ -19,6 +20,7 @@ export async function run(argv: string[]): Promise<number> {
     allowPositionals: true,
     options: {
       "base-url": { type: "string" },
+      "allow-large": { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },
   });
@@ -39,8 +41,11 @@ export async function run(argv: string[]): Promise<number> {
     return 1;
   }
 
-  const options = values["base-url"] ? { baseUrl: values["base-url"] } : {};
+  const options: { baseUrl?: string; allowLarge?: boolean } = {};
+  if (values["base-url"]) options.baseUrl = values["base-url"];
+  if (values["allow-large"]) options.allowLarge = true;
   const mermaid = await generateMermaid(target, options);
+
   process.stdout.write(mermaid + "\n");
   return 0;
 }

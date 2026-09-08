@@ -33,5 +33,10 @@ export async function generateMermaid(
     })
   );
   const graph = buildGraph(docs);
+  if (!options.allowLarge && (graph.nodes.length > 500 || graph.edges.length > 500)) {
+    throw new Error(
+      `Graph has ${graph.nodes.length} nodes and ${graph.edges.length} edges, which exceeds the 500 node/edge limit. Some renderers (e.g. GitHub) will not display it. Pass allowLarge: true to render anyway.`
+    );
+  }
   return renderMermaid(graph, options);
 }
