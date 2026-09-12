@@ -14,8 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Library API: `loadGraph`, `getDependencies`, `getDependents`, `neighborhood`, `toPosix`.
 - `okph graph <file>` renders the file plus its direct dependencies and dependents.
 - `okph affected <file>` — list a document plus all transitive dependents ("potentially affected"); `--graph` renders the affected subgraph.
+- `okph affected --git <base>` — seed affected from markdown files changed since `<base>` (commits, working tree, and untracked files); deleted documents are reported on stderr; supports `--graph`.
 - `--graph` flag on `deps`/`dependents` renders the result as a Mermaid subgraph.
-- Library API: `subgraph`, `getAffected`, `inducedSubgraph`.
+- Library API: `subgraph`, `getAffected`, `inducedSubgraph`, `changedMarkdownFiles`.
 
 ### Fixed
 

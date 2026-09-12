@@ -18,6 +18,7 @@ export {
 } from "./graph.js";
 export { renderMermaid } from "./mermaid.js";
 export { safeHref, escapeLabel } from "./security.js";
+export { changedMarkdownFiles } from "./git.js";
 export type { ParsedDoc, ParsedLink } from "./parse.js";
 export type { Graph, GraphNode, GraphEdge, GraphInput } from "./graph.js";
 export type { RenderOptions } from "./mermaid.js";
