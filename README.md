@@ -1,6 +1,6 @@
 # OKPH
 
-Git-native graph and impact-analysis tool for OKF knowledge bases. v0.1.0 generates a clickable Mermaid graph from a folder of Markdown files (default output; other formats may follow).
+Git-native graph and impact-analysis tool for OKF knowledge bases. Generates a clickable Mermaid graph from a folder of Markdown files (default output; other formats may follow).
 
 ## Install
 
@@ -15,9 +15,12 @@ pnpm i -g okph
 ```bash
 okph graph ./docs
 okph graph ./docs --base-url https://example.com/docs
+okph graph ./docs --allow-large
 ```
 
 Output is Mermaid graph syntax printed to stdout by default. Pipe it to a file or Mermaid renderer.
+
+Graphs over 500 nodes or edges fail by default, since many renderers (e.g. GitHub) truncate them. Pass `--allow-large` to render anyway.
 
 ## API
 
