@@ -117,12 +117,18 @@ export function escapeLabel(text: string): string {
 // oxlint-disable-next-line no-control-regex -- control chars are intentionally rejected
 const UNSAFE_TERMINAL_CHARS_RE = /[\x00-\x1f\x7f-\x9f]/;
 
+/** Unicode characters that can alter the displayed direction of terminal text. */
+const BIDI_CONTROL_CHARS_RE = /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
+
 /**
  * Make an untrusted string (a git-supplied filename, a CLI-supplied revision)
- * safe to print to a terminal or CI log. Strings containing control
- * characters are JSON-quoted so escapes are visible and unambiguous;
- * everything else passes through unchanged.
+ * safe to print to a terminal or CI log. Strings containing C0/C1 control
+ * characters are JSON-quoted, while bidirectional controls are rendered as
+ * visible Unicode escapes. Everything else passes through unchanged.
  */
 export function terminalSafe(text: string): string {
-  return UNSAFE_TERMINAL_CHARS_RE.test(text) ? JSON.stringify(text) : text;
+  const printable = UNSAFE_TERMINAL_CHARS_RE.test(text) ? JSON.stringify(text) : text;
+  return printable.replace(BIDI_CONTROL_CHARS_RE, (char) =>
+    `\\u${char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`
+  );
 }

@@ -87,4 +87,8 @@ describe("terminalSafe", () => {
     expect(terminalSafe("a\x1b[31m.md")).toBe(JSON.stringify("a\x1b[31m.md"));
     expect(terminalSafe("a\nb.md")).toBe(JSON.stringify("a\nb.md"));
   });
+
+  it("renders bidirectional controls as visible Unicode escapes", () => {
+    expect(terminalSafe("safe\u202Ecod.exe")).toBe("safe\\u202Ecod.exe");
+  });
 });

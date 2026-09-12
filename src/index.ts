@@ -4,6 +4,7 @@ import { discover, toPosix } from "./discover.js";
 import { parseDoc } from "./parse.js";
 import { buildGraph, neighborhood, type Graph, type GraphInput } from "./graph.js";
 import { renderMermaid, type RenderOptions } from "./mermaid.js";
+import { terminalSafe } from "./security.js";
 
 export { discover, toPosix, resolveDocPath } from "./discover.js";
 export { parseDoc } from "./parse.js";
@@ -49,7 +50,9 @@ export async function loadGraph(root: string, options: LoadGraphOptions = {}): P
       const abs = path.join(root, rel);
       const info = await stat(abs);
       if (info.size > MAX_DOC_BYTES) {
-        throw new Error(`File too large: ${rel} (${info.size} bytes, limit is ${MAX_DOC_BYTES})`);
+        throw new Error(
+          `File too large: ${terminalSafe(rel)} (${info.size} bytes, limit is ${MAX_DOC_BYTES})`
+        );
       }
       const content = await readFile(abs, "utf8");
       const { title, links } = parseDoc(content, rel);
