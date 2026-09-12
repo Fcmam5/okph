@@ -53,8 +53,10 @@ export async function run(argv: string[]): Promise<number> {
   if (command === "deps" || command === "dependents") {
     const root = process.cwd();
     const rel = toPosix(path.relative(root, path.resolve(target)));
-    if (rel === ".." || rel.startsWith("../") || path.isAbsolute(rel)) {
-      process.stderr.write(`Error: ${target} is outside the working directory.\n`);
+    if (!rel || rel === ".." || rel.startsWith("../") || path.isAbsolute(rel)) {
+      process.stderr.write(
+        `Error: ${target} is not a markdown file inside the working directory.\n`
+      );
       return 1;
     }
     const graph = await loadGraph(root);

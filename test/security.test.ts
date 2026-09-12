@@ -28,6 +28,14 @@ describe("safeHref", () => {
   it("blocks path traversal that escapes the base url origin", () => {
     expect(safeHref("../../../etc/passwd", "https://gh.com/o/r/blob/main")).toBeNull();
   });
+
+  it("blocks chars that break out of the click directive", () => {
+    expect(safeHref('x".md')).toBeNull();
+    expect(safeHref("x\n.md")).toBeNull();
+    expect(safeHref("x\r.md")).toBeNull();
+    expect(safeHref("x`.md")).toBeNull();
+    expect(safeHref('x".md', "https://gh.com/o/r")).toBeNull();
+  });
 });
 
 describe("escapeLabel", () => {

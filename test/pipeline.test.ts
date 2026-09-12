@@ -20,4 +20,14 @@ describe("generateMermaid", () => {
     const out = await generateMermaid(fixtures, { baseUrl: "https://gh.com/o/r/blob/main" });
     expect(out).toContain('"https://gh.com/o/r/blob/main/a.md"');
   });
+
+  it("renders the file's neighborhood when given a file path", async () => {
+    const chain = path.resolve(import.meta.dirname, "fixtures/chain");
+    const out = await generateMermaid(path.join(chain, "settlement.md"));
+    expect(out).toContain('["Settlement"]');
+    expect(out).toContain('["Payments"]');
+    expect(out).toContain('["Ledger"]');
+    expect(out).toContain('["Reconciliation"]');
+    expect(out).not.toContain('["Orphan"]');
+  });
 });

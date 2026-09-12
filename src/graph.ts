@@ -47,6 +47,11 @@ export function buildGraph(docs: readonly GraphInput[]): Graph {
     .map((d) => ({ id: nodeId(d.path), path: d.path, label: d.title }))
     .sort((a, b) => a.path.localeCompare(b.path));
 
+  const ids = new Set(nodes.map((n) => n.id));
+  if (ids.size !== nodes.length) {
+    throw new Error("Node id collision: two documents produced the same node id.");
+  }
+
   const seen = new Set<string>();
   const edges: GraphEdge[] = [];
   for (const doc of docs) {
@@ -84,6 +89,25 @@ export function getDependents(graph: Graph, file: string): string[] {
     .filter((e) => e.to === file)
     .map((e) => e.from)
     .sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * Subgraph containing `file` plus its direct dependencies and dependents:
+ * the file's immediate neighborhood. Unknown files yield an empty graph.
+ */
+export function neighborhood(graph: Graph, file: string): Graph {
+  if (!graph.nodes.some((n) => n.path === file)) {
+    return { nodes: [], edges: [] };
+  }
+  const keep = new Set([file]);
+  for (const e of graph.edges) {
+    if (e.from === file) keep.add(e.to);
+    if (e.to === file) keep.add(e.from);
+  }
+  return {
+    nodes: graph.nodes.filter((n) => keep.has(n.path)),
+    edges: graph.edges.filter((e) => keep.has(e.from) && keep.has(e.to)),
+  };
 }
 
 /** Deterministic, collision-resistant, Mermaid-safe node id from a path. */

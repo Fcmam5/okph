@@ -16,6 +16,13 @@ const ALLOWED_SCHEMES = new Set(["http:", "https:"]);
 const SCHEME_RE = /^([a-z][a-z0-9+.-]*):/i;
 
 /**
+ * Chars that can break out of a Mermaid `click "..."` directive or alter
+ * URL path semantics in browsers (`\` is treated as `/` by WHATWG parsing).
+ */
+// oxlint-disable-next-line no-control-regex -- control chars are intentionally rejected
+const UNSAFE_HREF_CHARS_RE = /["`\\\x00-\x1f]/;
+
+/**
  * Validate and normalize a link target for use in a Mermaid `click` directive.
  *
  * - No base URL: only relative, in-tree paths are allowed. Absolute http(s)
@@ -28,7 +35,7 @@ const SCHEME_RE = /^([a-z][a-z0-9+.-]*):/i;
  */
 export function safeHref(raw: string, baseUrl?: string): string | null {
   const target = raw.trim();
-  if (!target) return null;
+  if (!target || UNSAFE_HREF_CHARS_RE.test(target)) return null;
 
   const schemeMatch = SCHEME_RE.exec(target);
 

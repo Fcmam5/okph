@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildGraph, getDependencies, getDependents } from "../src/graph.js";
+import { buildGraph, getDependencies, getDependents, neighborhood } from "../src/graph.js";
 
 // payments -> settlement -> {ledger, reconciliation}
 const docs = [
@@ -27,5 +27,26 @@ describe("getDependents", () => {
     expect(getDependents(g, "ledger.md")).toEqual(["settlement.md"]);
     expect(getDependents(g, "settlement.md")).toEqual(["payments.md"]);
     expect(getDependents(g, "payments.md")).toEqual([]);
+  });
+});
+
+describe("neighborhood", () => {
+  it("keeps the file plus direct deps and dependents", () => {
+    const g = buildGraph([
+      ...docs,
+      { path: "orphan.md", title: "Orphan", links: [] },
+    ]);
+    const sub = neighborhood(g, "settlement.md");
+    expect(sub.nodes.map((n) => n.path)).toEqual([
+      "ledger.md",
+      "payments.md",
+      "reconciliation.md",
+      "settlement.md",
+    ]);
+    expect(sub.edges).toEqual([
+      { from: "payments.md", to: "settlement.md" },
+      { from: "settlement.md", to: "ledger.md" },
+      { from: "settlement.md", to: "reconciliation.md" },
+    ]);
   });
 });

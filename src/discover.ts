@@ -11,8 +11,8 @@ export async function discover(root: string): Promise<string[]> {
   const results: string[] = [];
   const queue: string[] = [root];
 
-  while (queue.length > 0) {
-    const dir = queue.shift()!;
+  for (let i = 0; i < queue.length; i++) {
+    const dir = queue[i]!;
     const dh = await opendir(dir);
     for await (const ent of dh) {
       if (IGNORED.has(ent.name) || ent.name.startsWith(".")) continue;

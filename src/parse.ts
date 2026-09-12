@@ -15,6 +15,8 @@ export interface ParsedLink {
    * For external links: the original href.
    */
   readonly target: string;
+  /** URL fragment (`#section`), without the leading `#`. */
+  readonly fragment?: string;
 }
 
 /** A parsed document: enough to build a labelled, linked graph. */
@@ -25,8 +27,8 @@ export interface ParsedDoc {
   readonly links: readonly ParsedLink[];
 }
 
-/** Matches leading YAML frontmatter delimited by `---` fences. */
-const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
+/** Matches leading YAML frontmatter delimited by `---` fences (BOM tolerated). */
+const FRONTMATTER_RE = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 
 /** Matches any leading URL scheme (e.g. `https:`, `mailto:`). */
 const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
@@ -74,8 +76,8 @@ function deriveTitle(
 
   for (const token of tokens) {
     if (token.type === "heading" && (token as { depth?: number }).depth === 1) {
-      const text = (token as { text?: string }).text;
-      if (text && text.trim()) return text.trim();
+      const text = inlineText((token as { tokens?: Token[] }).tokens).trim();
+      if (text) return text;
     }
   }
 
@@ -107,9 +109,39 @@ function classify(href: string, text: string, docRelPath: string): ParsedLink | 
   const pathPart = hashIndex === -1 ? href : href.slice(0, hashIndex);
   if (!pathPart) return null;
 
-  const fromDir = path.posix.dirname(docRelPath);
-  const resolved = path.posix.normalize(path.posix.join(fromDir, pathPart));
-  return { text, href, kind: "internal", target: resolved };
+  // A leading `/` is bundle-relative (per OKF spec), not filesystem-absolute.
+  const decoded = safeDecode(pathPart);
+  const resolved = decoded.startsWith("/")
+    ? path.posix.normalize(decoded.slice(1))
+    : path.posix.normalize(path.posix.join(path.posix.dirname(docRelPath), decoded));
+  return {
+    text,
+    href,
+    kind: "internal",
+    target: resolved,
+    ...(hashIndex === -1 ? {} : { fragment: href.slice(hashIndex + 1) }),
+  };
+}
+
+/** Flatten inline tokens to plain text, dropping markdown formatting. */
+function inlineText(tokens: Token[] | undefined): string {
+  if (!tokens) return "";
+  return tokens
+    .map((t) => {
+      const children = (t as { tokens?: Token[] }).tokens;
+      if (children) return inlineText(children);
+      return String((t as { text?: unknown }).text ?? (t as { raw?: unknown }).raw ?? "");
+    })
+    .join("");
+}
+
+/** Percent-decode a link path; malformed sequences keep the raw input. */
+function safeDecode(p: string): string {
+  try {
+    return decodeURIComponent(p);
+  } catch {
+    return p;
+  }
 }
 
 /** Depth-first walk over marked tokens, visiting every nested token once. */
