@@ -30,6 +30,7 @@ const UNSAFE_HREF_CHARS_RE = /["`\\\x00-\x1f]/;
  *   is rejected.
  * - With base URL: relative paths are joined onto the base, and the result
  *   must stay within the base origin+path (no traversal escape).
+ * - Double quotes, backticks, backslashes, and control characters are rejected.
  *
  * Returns the safe href, or `null` if the input must be dropped.
  */
