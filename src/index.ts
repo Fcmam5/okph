@@ -17,25 +17,51 @@ export {
   subgraph,
 } from "./graph.js";
 export { renderMermaid } from "./mermaid.js";
-export { safeHref, escapeLabel } from "./security.js";
+export { safeHref, escapeLabel, terminalSafe } from "./security.js";
 export { changedMarkdownFiles } from "./git.js";
 export type { ParsedDoc, ParsedLink } from "./parse.js";
 export type { Graph, GraphNode, GraphEdge, GraphInput } from "./graph.js";
 export type { RenderOptions } from "./mermaid.js";
 
+/** Options for {@link loadGraph}. */
+export interface LoadGraphOptions {
+  /**
+   * Extra root-relative POSIX paths to include as stub nodes when absent on
+   * disk — e.g. deleted documents. Edges from surviving documents to them are
+   * kept, so impact analysis can still find their dependents.
+   */
+  readonly extraPaths?: readonly string[];
+}
+
+/** Refuse to read a single markdown file larger than this (DoS guard). */
+export const MAX_DOC_BYTES = 5 * 1024 * 1024;
+
 /**
  * Read a folder of markdown documents and build the document graph.
  * Offline and read-only: it only reads files under `root`.
+ *
+ * @throws If a discovered file exceeds {@link MAX_DOC_BYTES}.
  */
-export async function loadGraph(root: string): Promise<Graph> {
+export async function loadGraph(root: string, options: LoadGraphOptions = {}): Promise<Graph> {
   const files = await discover(root);
   const docs: GraphInput[] = await Promise.all(
     files.map(async (rel) => {
-      const content = await readFile(path.join(root, rel), "utf8");
+      const abs = path.join(root, rel);
+      const info = await stat(abs);
+      if (info.size > MAX_DOC_BYTES) {
+        throw new Error(`File too large: ${rel} (${info.size} bytes, limit is ${MAX_DOC_BYTES})`);
+      }
+      const content = await readFile(abs, "utf8");
       const { title, links } = parseDoc(content, rel);
       return { path: rel, title, links };
     })
   );
+  const seen = new Set(files);
+  for (const p of options.extraPaths ?? []) {
+    if (!seen.has(p)) {
+      docs.push({ path: p, title: path.posix.basename(p, ".md"), links: [] });
+    }
+  }
   return buildGraph(docs);
 }
 

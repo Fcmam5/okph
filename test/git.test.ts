@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { mkdtemp, writeFile, mkdir, rm } from "node:fs/promises";
+import { mkdtemp, writeFile, mkdir, rename, rm } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -9,7 +9,10 @@ let repo: string;
 const git = (...args: string[]) => execFileSync("git", args, { cwd: repo });
 
 beforeAll(async () => {
-  repo = await mkdtemp(path.join(tmpdir(), "okph-git-"));
+  // Trailing space exercises the rev-parse newline strip in changedMarkdownFiles.
+  const orig = await mkdtemp(path.join(tmpdir(), "okph-git-"));
+  repo = `${orig} `;
+  await rename(orig, repo);
   git("init", "-q");
   git("config", "user.email", "t@t.t");
   git("config", "user.name", "t");

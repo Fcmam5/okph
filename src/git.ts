@@ -43,7 +43,7 @@ export async function changedMarkdownFiles(base: string, cwd: string): Promise<C
       ["rev-parse", "--show-toplevel"],
       { cwd: scanRoot }
     );
-    repoRoot = await realpath(top.trim());
+    repoRoot = await realpath(top.replace(/\r?\n$/, ""));
     const [d, del, u] = await Promise.all([
       execFileAsync("git", ["diff", "--name-only", "-z", "--diff-filter=d", base, "--"], {
         cwd: repoRoot,
