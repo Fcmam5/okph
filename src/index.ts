@@ -31,10 +31,16 @@ export async function loadGraph(root: string): Promise<Graph> {
 }
 
 /**
- * Read a folder of markdown documents and render a clickable Mermaid graph.
+ * Read markdown documents and render a clickable Mermaid graph.
  *
- * Offline and read-only: it only reads files under `root` and returns a
- * string. All untrusted content is sanitized during rendering.
+ * A directory renders its complete document graph. A file renders that
+ * document's immediate neighborhood, using its containing directory as the
+ * graph root.
+ * Offline and read-only: it returns a string and sanitizes untrusted content
+ * during rendering.
+ *
+ * @throws If a file is not a discovered markdown document, or if the graph
+ * exceeds the size limit unless `options.allowLarge` is enabled.
  */
 export async function generateMermaid(
   root: string,

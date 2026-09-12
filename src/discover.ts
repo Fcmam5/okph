@@ -28,6 +28,7 @@ export async function discover(root: string): Promise<string[]> {
   return results.sort((a, b) => a.localeCompare(b));
 }
 
+/** Convert the current platform's path separators to POSIX-style slashes. */
 export function toPosix(p: string): string {
   return p.split(path.sep).join("/");
 }

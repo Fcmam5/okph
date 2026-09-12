@@ -39,6 +39,8 @@ export interface Graph {
  * - Duplicate edges are collapsed.
  *
  * Pure: no I/O. External links are ignored here (the graph is doc-to-doc).
+ *
+ * @throws If two document paths produce the same node identifier.
  */
 export function buildGraph(docs: readonly GraphInput[]): Graph {
   const known = new Set(docs.map((d) => d.path));

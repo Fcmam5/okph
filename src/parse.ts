@@ -66,6 +66,7 @@ function splitFrontmatter(content: string): {
   return { frontmatter: {}, body };
 }
 
+/** Select the frontmatter title, first plain-text H1, or filename stem. */
 function deriveTitle(
   frontmatter: Record<string, unknown>,
   tokens: Token[],
@@ -96,6 +97,11 @@ function extractLinks(tokens: Token[], docRelPath: string): ParsedLink[] {
   return links;
 }
 
+/**
+ * Classify a link and resolve internal paths relative to `docRelPath`.
+ * Empty hrefs and fragment-only anchors are omitted; internal fragments are
+ * retained as metadata.
+ */
 function classify(href: string, text: string, docRelPath: string): ParsedLink | null {
   if (!href) return null;
 
