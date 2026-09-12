@@ -7,7 +7,15 @@ import { renderMermaid, type RenderOptions } from "./mermaid.js";
 
 export { discover, toPosix, resolveDocPath } from "./discover.js";
 export { parseDoc } from "./parse.js";
-export { buildGraph, getDependencies, getDependents, neighborhood, subgraph } from "./graph.js";
+export {
+  buildGraph,
+  getAffected,
+  getDependencies,
+  getDependents,
+  inducedSubgraph,
+  neighborhood,
+  subgraph,
+} from "./graph.js";
 export { renderMermaid } from "./mermaid.js";
 export { safeHref, escapeLabel } from "./security.js";
 export type { ParsedDoc, ParsedLink } from "./parse.js";
@@ -49,7 +57,6 @@ export async function generateMermaid(
   const info = await stat(root);
   let graph: Graph;
   if (info.isFile()) {
-    // A file input renders that document's immediate neighborhood.
     const dir = path.dirname(root);
     graph = neighborhood(await loadGraph(dir), toPosix(path.basename(root)));
     if (graph.nodes.length === 0) {

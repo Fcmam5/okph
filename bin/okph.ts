@@ -2,13 +2,17 @@
 import { parseArgs } from "node:util";
 import {
   generateMermaid,
+  getAffected,
   getDependencies,
   getDependents,
+  inducedSubgraph,
   loadGraph,
   renderMermaid,
   resolveDocPath,
   subgraph,
 } from "../src/index.js";
+
+const DOC_COMMANDS = new Set(["deps", "dependents", "affected"]);
 
 const USAGE = `okph - generate a Mermaid graph of a markdown knowledge base
 
@@ -16,12 +20,13 @@ Usage:
   okph graph <path> [--base-url <url>] [--allow-large]
   okph deps <file> [--graph]
   okph dependents <file> [--graph]
+  okph affected <file> [--graph]
 
 Options:
   --base-url <url>  Emit absolute click links joined onto <url>.
                     Omit for relative links (GitHub/GitLab rendered markdown).
   --allow-large     Bypass the 500 node/edge limit and render anyway.
-  --graph           Render deps/dependents as a Mermaid subgraph instead of a list.
+  --graph           Render deps/dependents/affected as a Mermaid subgraph instead of a list.
   -h, --help        Show this help.
 `;
 
@@ -49,7 +54,7 @@ export async function run(argv: string[]): Promise<number> {
 
   const [command, target] = positionals;
 
-  if (command !== "graph" && command !== "deps" && command !== "dependents") {
+  if (command !== "graph" && !DOC_COMMANDS.has(command ?? "")) {
     process.stderr.write(`Unknown or missing command: ${command ?? "(none)"}\n\n${USAGE}`);
     return 1;
   }
@@ -58,7 +63,7 @@ export async function run(argv: string[]): Promise<number> {
     return 1;
   }
 
-  if (command === "deps" || command === "dependents") {
+  if (command && DOC_COMMANDS.has(command)) {
     const root = process.cwd();
     const rel = resolveDocPath(root, target);
     if (!rel || !rel.toLowerCase().endsWith(".md")) {
@@ -72,10 +77,24 @@ export async function run(argv: string[]): Promise<number> {
       process.stderr.write(`Error: not a known document: ${rel}\n`);
       return 1;
     }
+
+    const baseUrl = values["base-url"];
+    const renderOpts = baseUrl ? { baseUrl } : {};
+
+    if (command === "affected") {
+      const affected = getAffected(graph, [rel]);
+      if (values.graph) {
+        process.stdout.write(renderMermaid(inducedSubgraph(graph, affected), renderOpts) + "\n");
+      } else {
+        process.stderr.write("Potentially affected documents:\n");
+        process.stdout.write(affected.join("\n") + "\n");
+      }
+      return 0;
+    }
+
     if (values.graph) {
-      const baseUrl = values["base-url"];
       process.stdout.write(
-        renderMermaid(subgraph(graph, rel, command), baseUrl ? { baseUrl } : {}) + "\n"
+        renderMermaid(subgraph(graph, rel, command as "deps" | "dependents"), renderOpts) + "\n"
       );
       return 0;
     }

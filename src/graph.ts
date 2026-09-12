@@ -134,6 +134,50 @@ export function subgraph(graph: Graph, file: string, direction: "deps" | "depend
   };
 }
 
+/**
+ * Potentially affected documents: the seeds plus every document that
+ * transitively links to them (reverse traversal). Cycle-safe via a visited
+ * set. Unknown seeds are ignored; an all-unknown seed list yields [].
+ *
+ * Reachable ≠ definitely affected — callers should phrase output as
+ * "potentially affected".
+ */
+export function getAffected(graph: Graph, files: readonly string[]): string[] {
+  const incoming = new Map<string, string[]>();
+  for (const e of graph.edges) {
+    const list = incoming.get(e.to);
+    if (list) list.push(e.from);
+    else incoming.set(e.to, [e.from]);
+  }
+
+  const known = new Set(graph.nodes.map((n) => n.path));
+  const affected = new Set<string>();
+  const queue = files.filter((f) => known.has(f));
+
+  for (let i = 0; i < queue.length; i++) {
+    const cur = queue[i]!;
+    if (affected.has(cur)) continue;
+    affected.add(cur);
+    for (const from of incoming.get(cur) ?? []) {
+      if (!affected.has(from)) queue.push(from);
+    }
+  }
+
+  return [...affected].sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * Induced subgraph: only the given node paths and the edges between them.
+ * Paths that are not nodes are ignored.
+ */
+export function inducedSubgraph(graph: Graph, paths: readonly string[]): Graph {
+  const keep = new Set(paths);
+  return {
+    nodes: graph.nodes.filter((n) => keep.has(n.path)),
+    edges: graph.edges.filter((e) => keep.has(e.from) && keep.has(e.to)),
+  };
+}
+
 /** Deterministic, collision-resistant, Mermaid-safe node id from a path. */
 function nodeId(path: string): string {
   const hash = createHash("sha256").update(path).digest("hex").slice(0, 8);

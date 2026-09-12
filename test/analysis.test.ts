@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildGraph, getDependencies, getDependents, neighborhood, subgraph } from "../src/graph.js";
+import { buildGraph, getAffected, getDependencies, getDependents, inducedSubgraph, neighborhood, subgraph } from "../src/graph.js";
 
 // payments -> settlement -> {ledger, reconciliation}
 const docs = [
@@ -76,5 +76,58 @@ describe("subgraph", () => {
   it("returns an empty graph for unknown files", () => {
     const g = buildGraph(docs);
     expect(subgraph(g, "nope.md", "deps")).toEqual({ nodes: [], edges: [] });
+  });
+});
+
+describe("getAffected", () => {
+  it("returns the seed plus all transitive dependents, sorted", () => {
+    const g = buildGraph(docs);
+    expect(getAffected(g, ["ledger.md"])).toEqual([
+      "ledger.md",
+      "payments.md",
+      "settlement.md",
+    ]);
+    expect(getAffected(g, ["settlement.md"])).toEqual(["payments.md", "settlement.md"]);
+    expect(getAffected(g, ["payments.md"])).toEqual(["payments.md"]);
+  });
+
+  it("takes the union of multiple seeds", () => {
+    const g = buildGraph(docs);
+    expect(getAffected(g, ["ledger.md", "reconciliation.md"])).toEqual([
+      "ledger.md",
+      "payments.md",
+      "reconciliation.md",
+      "settlement.md",
+    ]);
+  });
+
+  it("is safe on cycles", () => {
+    const g = buildGraph([
+      { path: "a.md", title: "A", links: [{ text: "b", href: "b.md", kind: "internal" as const, target: "b.md" }] },
+      { path: "b.md", title: "B", links: [{ text: "c", href: "c.md", kind: "internal" as const, target: "c.md" }] },
+      { path: "c.md", title: "C", links: [{ text: "a", href: "a.md", kind: "internal" as const, target: "a.md" }] },
+    ]);
+    expect(getAffected(g, ["a.md"])).toEqual(["a.md", "b.md", "c.md"]);
+  });
+
+  it("ignores unknown seeds", () => {
+    const g = buildGraph(docs);
+    expect(getAffected(g, ["nope.md"])).toEqual([]);
+  });
+});
+
+describe("inducedSubgraph", () => {
+  it("keeps only the given nodes and the edges between them", () => {
+    const g = buildGraph(docs);
+    const sub = inducedSubgraph(g, getAffected(g, ["ledger.md"]));
+    expect(sub.nodes.map((n) => n.path)).toEqual([
+      "ledger.md",
+      "payments.md",
+      "settlement.md",
+    ]);
+    expect(sub.edges).toEqual([
+      { from: "payments.md", to: "settlement.md" },
+      { from: "settlement.md", to: "ledger.md" },
+    ]);
   });
 });

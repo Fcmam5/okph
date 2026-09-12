@@ -19,9 +19,11 @@ okph graph ./docs --allow-large
 okph deps docs/ledger.md        # files ledger.md links to
 okph dependents docs/ledger.md  # files linking to ledger.md
 okph deps docs/ledger.md --graph  # same, as a Mermaid subgraph
+okph affected docs/ledger.md      # ledger.md + everything transitively linking to it
+okph affected docs/ledger.md --graph
 ```
 
-`deps`/`dependents` scan the knowledge base from the current working directory and print sorted paths, one per line — no Mermaid. Paths are relative to your cwd, so run from the repo root for repo-relative output.
+`deps`/`dependents`/`affected` scan the knowledge base from the current working directory and print sorted paths, one per line — no Mermaid. Paths are relative to your cwd, so run from the repo root for repo-relative output. `affected` means *potentially* affected: reachable through links, not necessarily impacted. Links are read as citations — `a → b` means "a relies on b's content", so `affected b.md` reports `b.md` plus everything that cites it, transitively.
 
 `graph` output is Mermaid graph syntax printed to stdout. Pipe it to a file or Mermaid renderer.
 
