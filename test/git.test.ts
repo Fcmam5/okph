@@ -9,9 +9,11 @@ let repo: string;
 const git = (...args: string[]) => execFileSync("git", args, { cwd: repo });
 
 beforeAll(async () => {
-  // Trailing space exercises the rev-parse newline strip in changedMarkdownFiles.
+  // The trailing suffix exercises the rev-parse newline strip. Windows strips
+  // trailing spaces from directory names, so use a non-breaking space there.
   const orig = await mkdtemp(path.join(tmpdir(), "okph-git-"));
-  repo = `${orig} `;
+  const trailingSuffix = process.platform === "win32" ? "\u00A0" : " ";
+  repo = `${orig}${trailingSuffix}`;
   await rename(orig, repo);
   git("init", "-q");
   git("config", "user.email", "t@t.t");
