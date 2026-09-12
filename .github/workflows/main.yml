@@ -1,4 +1,6 @@
 name: Main pipeline
+permissions:
+  contents: read
 on:
   push:
     branches: 
@@ -35,3 +37,59 @@ jobs:
       #     COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
 
       - run: pnpm run build # Test build, ain't falling for #16 again
+
+      # Pack once; the OS matrix smoke-tests this exact artifact, the same
+      # tarball consumers would install (mirrors release.yml's verified tarball).
+      - name: Pack CLI tarball for the OS matrix
+        run: |
+          mkdir -p "$RUNNER_TEMP/pack"
+          pnpm pack --pack-destination "$RUNNER_TEMP/pack"
+          mv "$RUNNER_TEMP"/pack/*.tgz "$RUNNER_TEMP/pack/okph.tgz"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cli-tarball
+          path: ${{ runner.temp }}/pack/okph.tgz
+          if-no-files-found: error
+          retention-days: 1
+
+  # Smoke matrix: the CLI is path- and git-subprocess-heavy, so run the real
+  # test suite on each OS. Lint/typecheck/audit stay on the ubuntu gate above.
+  test-matrix:
+    name: Test (${{ matrix.os }})
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11
+
+      - name: Use Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      # vitest needs devDeps; the suite exercises real git/fs per-OS.
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: cli-tarball
+          path: ${{ runner.temp }}/pack
+
+      # Install the real package like a consumer would — exercises the npm bin
+      # shim (okph.cmd/okph.ps1 on Windows), not just `node dist/...`.
+      - name: CLI smoke test (installed artifact)
+        run: |
+          npm install --global "${{ runner.temp }}/pack/okph.tgz"
+          okph --help
+          okph graph test/fixtures/docs
+          okph deps test/fixtures/docs/a.md
+          okph affected test/fixtures/docs/a.md
