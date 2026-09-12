@@ -13,8 +13,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `okph dependents <file>` — list documents that link to a document.
 - Library API: `loadGraph`, `getDependencies`, `getDependents`, `neighborhood`, `toPosix`.
 - `okph graph <file>` renders the file plus its direct dependencies and dependents.
+- `okph affected <file>` — list a document plus all transitive dependents ("potentially affected"); `--graph` renders the affected subgraph.
+- `okph affected --git <base>` — seed affected from markdown files changed or deleted since `<base>` (commits, working tree, and untracked files); deleted documents are reported on stderr and kept as stub nodes so their dependents are still found; supports `--graph`.
 - `--graph` flag on `deps`/`dependents` renders the result as a Mermaid subgraph.
-- Library API: `subgraph`.
+- Library API: `subgraph`, `getAffected`, `inducedSubgraph`, `changedMarkdownFiles`.
+- Library API: `loadGraph(root, { extraPaths })`, `terminalSafe`.
+- Per-file size limit (`MAX_DOC_BYTES`, 5 MiB) when loading documents.
+
+### Security
+
+- Mermaid labels now escape `#`, `&`, `\`, `<`, `>` in addition to quotes and brackets — HTML/entity injection into labels is neutralized for renderers that allow HTML.
+- `click` hrefs percent-encode each path segment: filenames containing `%`, `#`, `?`, spaces, or encoded `..` sequences can no longer escape the base URL or the site root.
+- Absolute `click` URLs must be `http(s)://`; a bare `scheme:` filename (e.g. `https:evil.com.md`) is rejected instead of resolving cross-origin.
+- Filenames containing terminal control characters are JSON-quoted in CLI output (ANSI/log injection via crafted filenames).
+- Git root detection preserves trailing spaces in repository paths.
 
 ### Fixed
 

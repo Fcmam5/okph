@@ -38,29 +38,33 @@ export function safeHref(raw: string, baseUrl?: string): string | null {
   const target = raw.trim();
   if (!target || UNSAFE_HREF_CHARS_RE.test(target)) return null;
 
-  const schemeMatch = SCHEME_RE.exec(target);
-
-  // Absolute URL with an explicit scheme.
-  if (schemeMatch) {
-    const scheme = schemeMatch[1]!.toLowerCase() + ":";
-    if (!ALLOWED_SCHEMES.has(scheme)) return null;
+  // Absolute URL: require `scheme://`. A bare `https:foo` is a legitimate
+  // filename, and `new URL("https:evil.com")` would parse it as a cross-origin
+  // link — so only the explicit `//` form counts as absolute.
+  if (/^https?:\/\//i.test(target)) {
     try {
       const parsed = new URL(target);
-      return parsed.href;
+      return ALLOWED_SCHEMES.has(parsed.protocol) ? parsed.href : null;
     } catch {
       return null;
     }
   }
+  if (SCHEME_RE.test(target)) return null;
 
   // Protocol-relative (//host) is treated as unsafe: ambiguous origin.
   if (target.startsWith("//")) return null;
 
-  // Relative path from here on.
+  // Relative path. Percent-encode each literal segment so `%`, `#`, `?`,
+  // `<`, `>` and spaces can't be reinterpreted during URL resolution —
+  // raw `%2e%2e` segments would defeat both the traversal and the base-path
+  // containment checks when the browser decodes them.
+  const encoded = target.split("/").map(encodeURIComponent).join("/");
+
   if (!baseUrl) {
     // Reject absolute filesystem paths; keep it relative and in-tree.
     if (target.startsWith("/")) return null;
     if (escapesRoot(target)) return null;
-    return target;
+    return encoded;
   }
 
   // Join relative path onto the base URL and confirm containment.
@@ -73,7 +77,7 @@ export function safeHref(raw: string, baseUrl?: string): string | null {
   if (!ALLOWED_SCHEMES.has(base.protocol)) return null;
 
   const basePath = base.pathname.endsWith("/") ? base.pathname : base.pathname + "/";
-  const joinedPath = path.posix.normalize(basePath + target.replace(/^\/+/, ""));
+  const joinedPath = path.posix.normalize(basePath + encoded.replace(/^\/+/, ""));
   if (!joinedPath.startsWith(basePath)) return null; // traversal escaped base
 
   const result = new URL(base.origin);
@@ -90,14 +94,41 @@ function escapesRoot(relPath: string): boolean {
 /**
  * Escape a string for safe use as a Mermaid node label.
  *
- * Uses Mermaid HTML-entity codes (`#nn;`) so the characters render literally
- * instead of being parsed as node/link syntax. Newlines are collapsed to
- * spaces to keep output on a single line.
+ * Uses Mermaid entity codes (`#nn;`) so the characters render literally
+ * instead of being parsed as node/link syntax or HTML. `#` and `&` must be
+ * escaped first: they introduce entity references that renderers decode
+ * (e.g. `#60;` becomes `<`, `&#60;` too), which would bypass the `<`/`>`
+ * escaping. Newlines are collapsed to spaces to keep output on one line.
  */
 export function escapeLabel(text: string): string {
   return text
     .replace(/\r?\n/g, " ")
+    .replace(/#/g, "#35;")
+    .replace(/&/g, "#38;")
+    .replace(/\\/g, "#92;")
     .replace(/"/g, "#quot;")
     .replace(/\[/g, "#91;")
-    .replace(/\]/g, "#93;");
+    .replace(/\]/g, "#93;")
+    .replace(/</g, "#60;")
+    .replace(/>/g, "#62;");
+}
+
+/** Terminal control chars that must not reach stdout/stderr raw. */
+// oxlint-disable-next-line no-control-regex -- control chars are intentionally rejected
+const UNSAFE_TERMINAL_CHARS_RE = /[\x00-\x1f\x7f-\x9f]/;
+
+/** Unicode characters that can alter the displayed direction of terminal text. */
+const BIDI_CONTROL_CHARS_RE = /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
+
+/**
+ * Make an untrusted string (a git-supplied filename, a CLI-supplied revision)
+ * safe to print to a terminal or CI log. Strings containing C0/C1 control
+ * characters are JSON-quoted, while bidirectional controls are rendered as
+ * visible Unicode escapes. Everything else passes through unchanged.
+ */
+export function terminalSafe(text: string): string {
+  const printable = UNSAFE_TERMINAL_CHARS_RE.test(text) ? JSON.stringify(text) : text;
+  return printable.replace(BIDI_CONTROL_CHARS_RE, (char) =>
+    `\\u${char.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`
+  );
 }

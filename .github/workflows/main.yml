@@ -24,6 +24,7 @@ jobs:
           node-version-file: .nvmrc
 
       - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level=high
       - run: pnpm run typecheck
       - run: pnpm run lint
       - run: pnpm run test:cov

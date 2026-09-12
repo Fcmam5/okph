@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { generateMermaid } from "../src/index.js";
+import { generateMermaid, loadGraph, MAX_DOC_BYTES } from "../src/index.js";
 
 let tmpDir: string;
 
@@ -19,6 +19,19 @@ afterAll(() => {
 });
 
 describe("size limit", () => {
+  it("sanitizes an oversized file path while preserving size details", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "okph-oversized-"));
+    const filename = "safe\u202Ecod.md";
+    fs.writeFileSync(path.join(dir, filename), Buffer.alloc(MAX_DOC_BYTES + 1));
+    try {
+      await expect(loadGraph(dir)).rejects.toThrow(
+        `File too large: safe\\u202Ecod.md (${MAX_DOC_BYTES + 1} bytes, limit is ${MAX_DOC_BYTES})`
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("throws when a graph exceeds 500 nodes", async () => {
     await expect(generateMermaid(tmpDir)).rejects.toThrow(
       /exceeds the 500 node\/edge limit/
