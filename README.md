@@ -5,9 +5,9 @@ Git-native graph and impact-analysis tool for OKF knowledge bases. Generates a c
 ## Install
 
 ```bash
-npm i -g okph
+npm i -g @fcmam5/okph
 # or
-pnpm i -g okph
+pnpm i -g @fcmam5/okph
 ```
 
 ## CLI
@@ -25,7 +25,7 @@ Graphs over 500 nodes or edges fail by default, since many renderers (e.g. GitHu
 ## API
 
 ```ts
-import { generateMermaid } from "okph";
+import { generateMermaid } from "@fcmam5/okph";
 
 const graph = await generateMermaid("./docs", {
   baseUrl: "https://example.com/docs",
