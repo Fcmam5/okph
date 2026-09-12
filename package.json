@@ -1,6 +1,6 @@
 {
   "name": "okph",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Git-native graph and impact-analysis tool for OKF knowledge bases.",
   "main": "dist/src/index.mjs",
   "types": "dist/src/index.d.mts",
@@ -46,13 +46,6 @@
   ],
   "author": "Abdeldjalil Fortas (Fcmam5)",
   "license": "MIT",
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "^11.5.3",
-      "onFail": "download"
-    }
-  },
   "type": "module",
   "dependencies": {
     "marked": "^18.0.12",
