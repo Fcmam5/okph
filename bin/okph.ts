@@ -1,25 +1,27 @@
 #!/usr/bin/env node
-import path from "node:path";
 import { parseArgs } from "node:util";
 import {
   generateMermaid,
   getDependencies,
   getDependents,
   loadGraph,
-  toPosix,
+  renderMermaid,
+  resolveDocPath,
+  subgraph,
 } from "../src/index.js";
 
 const USAGE = `okph - generate a Mermaid graph of a markdown knowledge base
 
 Usage:
   okph graph <path> [--base-url <url>] [--allow-large]
-  okph deps <file>
-  okph dependents <file>
+  okph deps <file> [--graph]
+  okph dependents <file> [--graph]
 
 Options:
   --base-url <url>  Emit absolute click links joined onto <url>.
                     Omit for relative links (GitHub/GitLab rendered markdown).
   --allow-large     Bypass the 500 node/edge limit and render anyway.
+  --graph           Render deps/dependents as a Mermaid subgraph instead of a list.
   -h, --help        Show this help.
 `;
 
@@ -30,6 +32,7 @@ export async function run(argv: string[]): Promise<number> {
     options: {
       "base-url": { type: "string" },
       "allow-large": { type: "boolean" },
+      graph: { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },
   });
@@ -52,8 +55,8 @@ export async function run(argv: string[]): Promise<number> {
 
   if (command === "deps" || command === "dependents") {
     const root = process.cwd();
-    const rel = toPosix(path.relative(root, path.resolve(target)));
-    if (!rel || rel === ".." || rel.startsWith("../") || path.isAbsolute(rel)) {
+    const rel = resolveDocPath(root, target);
+    if (!rel || !rel.toLowerCase().endsWith(".md")) {
       process.stderr.write(
         `Error: ${target} is not a markdown file inside the working directory.\n`
       );
@@ -63,6 +66,13 @@ export async function run(argv: string[]): Promise<number> {
     if (!graph.nodes.some((n) => n.path === rel)) {
       process.stderr.write(`Error: not a known document: ${rel}\n`);
       return 1;
+    }
+    if (values.graph) {
+      const baseUrl = values["base-url"];
+      process.stdout.write(
+        renderMermaid(subgraph(graph, rel, command), baseUrl ? { baseUrl } : {}) + "\n"
+      );
+      return 0;
     }
     const result =
       command === "deps" ? getDependencies(graph, rel) : getDependents(graph, rel);

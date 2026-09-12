@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `okph dependents <file>` — list documents that link to a document.
 - Library API: `loadGraph`, `getDependencies`, `getDependents`, `neighborhood`, `toPosix`.
 - `okph graph <file>` renders the file plus its direct dependencies and dependents.
+- `--graph` flag on `deps`/`dependents` renders the result as a Mermaid subgraph.
+- Library API: `subgraph`.
 
 ### Fixed
 

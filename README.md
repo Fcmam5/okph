@@ -18,11 +18,12 @@ okph graph ./docs --base-url https://example.com/docs
 okph graph ./docs --allow-large
 okph deps docs/ledger.md        # files ledger.md links to
 okph dependents docs/ledger.md  # files linking to ledger.md
+okph deps docs/ledger.md --graph  # same, as a Mermaid subgraph
 ```
 
-`deps`/`dependents` scan the knowledge base from the current working directory.
+`deps`/`dependents` scan the knowledge base from the current working directory and print sorted paths, one per line — no Mermaid. Paths are relative to your cwd, so run from the repo root for repo-relative output.
 
-Output is Mermaid graph syntax printed to stdout by default. Pipe it to a file or Mermaid renderer.
+`graph` output is Mermaid graph syntax printed to stdout. Pipe it to a file or Mermaid renderer.
 
 Graphs over 500 nodes or edges fail by default, since many renderers (e.g. GitHub) truncate them. Pass `--allow-large` to render anyway.
 

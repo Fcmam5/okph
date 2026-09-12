@@ -5,9 +5,9 @@ import { parseDoc } from "./parse.js";
 import { buildGraph, neighborhood, type Graph, type GraphInput } from "./graph.js";
 import { renderMermaid, type RenderOptions } from "./mermaid.js";
 
-export { discover, toPosix } from "./discover.js";
+export { discover, toPosix, resolveDocPath } from "./discover.js";
 export { parseDoc } from "./parse.js";
-export { buildGraph, getDependencies, getDependents, neighborhood } from "./graph.js";
+export { buildGraph, getDependencies, getDependents, neighborhood, subgraph } from "./graph.js";
 export { renderMermaid } from "./mermaid.js";
 export { safeHref, escapeLabel } from "./security.js";
 export type { ParsedDoc, ParsedLink } from "./parse.js";

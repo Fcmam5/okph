@@ -31,3 +31,15 @@ export async function discover(root: string): Promise<string[]> {
 export function toPosix(p: string): string {
   return p.split(path.sep).join("/");
 }
+
+/**
+ * Resolve `target` (as typed by a user) to a root-relative POSIX path,
+ * or `null` if it escapes `root` or is empty.
+ */
+export function resolveDocPath(root: string, target: string): string | null {
+  const rel = toPosix(path.relative(root, path.resolve(root, target)));
+  if (rel === "" || rel === ".." || rel.startsWith("../") || path.isAbsolute(rel)) {
+    return null;
+  }
+  return rel;
+}

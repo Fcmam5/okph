@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildGraph, getDependencies, getDependents, neighborhood } from "../src/graph.js";
+import { buildGraph, getDependencies, getDependents, neighborhood, subgraph } from "../src/graph.js";
 
 // payments -> settlement -> {ledger, reconciliation}
 const docs = [
@@ -48,5 +48,33 @@ describe("neighborhood", () => {
       { from: "settlement.md", to: "ledger.md" },
       { from: "settlement.md", to: "reconciliation.md" },
     ]);
+  });
+});
+
+describe("subgraph", () => {
+  it('"deps" keeps the file plus its direct dependencies and their edges', () => {
+    const g = buildGraph(docs);
+    const sub = subgraph(g, "settlement.md", "deps");
+    expect(sub.nodes.map((n) => n.path)).toEqual([
+      "ledger.md",
+      "reconciliation.md",
+      "settlement.md",
+    ]);
+    expect(sub.edges).toEqual([
+      { from: "settlement.md", to: "ledger.md" },
+      { from: "settlement.md", to: "reconciliation.md" },
+    ]);
+  });
+
+  it('"dependents" keeps the file plus its direct dependents and their edges', () => {
+    const g = buildGraph(docs);
+    const sub = subgraph(g, "settlement.md", "dependents");
+    expect(sub.nodes.map((n) => n.path)).toEqual(["payments.md", "settlement.md"]);
+    expect(sub.edges).toEqual([{ from: "payments.md", to: "settlement.md" }]);
+  });
+
+  it("returns an empty graph for unknown files", () => {
+    const g = buildGraph(docs);
+    expect(subgraph(g, "nope.md", "deps")).toEqual({ nodes: [], edges: [] });
   });
 });

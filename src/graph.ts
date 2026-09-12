@@ -110,6 +110,28 @@ export function neighborhood(graph: Graph, file: string): Graph {
   };
 }
 
+/**
+ * Directional subgraph: `file` plus its direct dependencies (`"deps"`) or
+ * direct dependents (`"dependents"`), with only the edges in that direction.
+ * Unknown files yield an empty graph.
+ */
+export function subgraph(graph: Graph, file: string, direction: "deps" | "dependents"): Graph {
+  if (!graph.nodes.some((n) => n.path === file)) {
+    return { nodes: [], edges: [] };
+  }
+  const isDeps = direction === "deps";
+  const related = new Set(
+    isDeps ? getDependencies(graph, file) : getDependents(graph, file)
+  );
+  const keep = new Set([file, ...related]);
+  return {
+    nodes: graph.nodes.filter((n) => keep.has(n.path)),
+    edges: graph.edges.filter((e) =>
+      isDeps ? e.from === file && related.has(e.to) : e.to === file && related.has(e.from)
+    ),
+  };
+}
+
 /** Deterministic, collision-resistant, Mermaid-safe node id from a path. */
 function nodeId(path: string): string {
   const hash = createHash("sha256").update(path).digest("hex").slice(0, 8);
