@@ -28,6 +28,6 @@ export async function discover(root: string): Promise<string[]> {
   return results.sort((a, b) => a.localeCompare(b));
 }
 
-function toPosix(p: string): string {
+export function toPosix(p: string): string {
   return p.split(path.sep).join("/");
 }

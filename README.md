@@ -16,7 +16,11 @@ pnpm i -g @fcmam5/okph
 okph graph ./docs
 okph graph ./docs --base-url https://example.com/docs
 okph graph ./docs --allow-large
+okph deps docs/ledger.md        # files ledger.md links to
+okph dependents docs/ledger.md  # files linking to ledger.md
 ```
+
+`deps`/`dependents` scan the knowledge base from the current working directory.
 
 Output is Mermaid graph syntax printed to stdout by default. Pipe it to a file or Mermaid renderer.
 

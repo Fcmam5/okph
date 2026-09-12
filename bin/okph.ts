@@ -1,11 +1,20 @@
 #!/usr/bin/env node
+import path from "node:path";
 import { parseArgs } from "node:util";
-import { generateMermaid } from "../src/index.js";
+import {
+  generateMermaid,
+  getDependencies,
+  getDependents,
+  loadGraph,
+  toPosix,
+} from "../src/index.js";
 
 const USAGE = `okph - generate a Mermaid graph of a markdown knowledge base
 
 Usage:
   okph graph <path> [--base-url <url>] [--allow-large]
+  okph deps <file>
+  okph dependents <file>
 
 Options:
   --base-url <url>  Emit absolute click links joined onto <url>.
@@ -32,13 +41,31 @@ export async function run(argv: string[]): Promise<number> {
 
   const [command, target] = positionals;
 
-  if (command !== "graph") {
+  if (command !== "graph" && command !== "deps" && command !== "dependents") {
     process.stderr.write(`Unknown or missing command: ${command ?? "(none)"}\n\n${USAGE}`);
     return 1;
   }
   if (!target) {
     process.stderr.write(`Missing <path>.\n\n${USAGE}`);
     return 1;
+  }
+
+  if (command === "deps" || command === "dependents") {
+    const root = process.cwd();
+    const rel = toPosix(path.relative(root, path.resolve(target)));
+    if (rel === ".." || rel.startsWith("../") || path.isAbsolute(rel)) {
+      process.stderr.write(`Error: ${target} is outside the working directory.\n`);
+      return 1;
+    }
+    const graph = await loadGraph(root);
+    if (!graph.nodes.some((n) => n.path === rel)) {
+      process.stderr.write(`Error: not a known document: ${rel}\n`);
+      return 1;
+    }
+    const result =
+      command === "deps" ? getDependencies(graph, rel) : getDependents(graph, rel);
+    if (result.length > 0) process.stdout.write(result.join("\n") + "\n");
+    return 0;
   }
 
   const options: { baseUrl?: string; allowLarge?: boolean } = {};

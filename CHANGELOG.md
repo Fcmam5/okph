@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `okph deps <file>` — list direct outgoing links of a document.
+- `okph dependents <file>` — list documents that link to a document.
+- Library API: `loadGraph`, `getDependencies`, `getDependents`, `toPosix`.
+
 ## [0.1.1] - 2026-09-12
 
 ### Changed

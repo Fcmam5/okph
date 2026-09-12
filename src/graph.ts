@@ -64,6 +64,28 @@ export function buildGraph(docs: readonly GraphInput[]): Graph {
   return { nodes, edges };
 }
 
+/**
+ * Direct internal dependencies: the paths `file` links to, sorted.
+ * Unknown files yield an empty list.
+ */
+export function getDependencies(graph: Graph, file: string): string[] {
+  return graph.edges
+    .filter((e) => e.from === file)
+    .map((e) => e.to)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * Direct dependents: the paths that link to `file`, sorted.
+ * Unknown files yield an empty list.
+ */
+export function getDependents(graph: Graph, file: string): string[] {
+  return graph.edges
+    .filter((e) => e.to === file)
+    .map((e) => e.from)
+    .sort((a, b) => a.localeCompare(b));
+}
+
 /** Deterministic, collision-resistant, Mermaid-safe node id from a path. */
 function nodeId(path: string): string {
   const hash = createHash("sha256").update(path).digest("hex").slice(0, 8);
