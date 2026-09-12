@@ -1,5 +1,86 @@
 # OKPH
 
-OKF + Graph = OKPH
+Git-native graph and impact-analysis tool for OKF knowledge bases. v0.1.0 generates a clickable Mermaid graph from a folder of Markdown files (default output; other formats may follow).
 
-A tool "I" needed to generate Mermaid graphs from our OKF documentation. The goal was to create a visual and a clickable ToC/index from our documents.
+## Install
+
+```bash
+npm i -g okph
+# or
+pnpm i -g okph
+```
+
+## CLI
+
+```bash
+okph graph ./docs
+okph graph ./docs --base-url https://example.com/docs
+```
+
+Output is Mermaid graph syntax printed to stdout by default. Pipe it to a file or Mermaid renderer.
+
+## API
+
+```ts
+import { generateMermaid } from "okph";
+
+const graph = await generateMermaid("./docs", {
+  baseUrl: "https://example.com/docs",
+});
+```
+
+## Example
+
+The example below was generated from the [`supachai-j/open-knowledge-format-starter`](https://github.com/supachai-j/open-knowledge-format-starter) OKF bundle using `--base-url`.
+
+```mermaid
+graph TD
+  n_a48746ca["Subdirectories"]
+  n_7204c0a4["Directory Update Log"]
+  n_e5402305["Metrics"]
+  n_c332fa58["Weekly Active Users (WAU)"]
+  n_84209736["Incident Response (Sev1/Sev2)"]
+  n_2ee90f39["Playbooks"]
+  n_620ec17c["Subdirectories"]
+  n_84ac5870["Joins"]
+  n_c61967be["Orders → Customers join"]
+  n_ea678391["Customers"]
+  n_50516fd3["Tables"]
+  n_17ec6115["Orders"]
+  n_c61967be --> n_ea678391
+  n_c61967be --> n_17ec6115
+  click n_a48746ca "https://github.com/supachai-j/open-knowledge-format-starter/blob/main/wiki/index.md"
+  click n_7204c0a4 "https://github.com/supachai-j/open-knowledge-format-starter/blob/main/wiki/log.md"
+  click n_e5402305 "https://github.com/supachai-j/open-knowledge-format-starter/blob/main/wiki/metrics/index.md"
+  click n_c332fa58 "https://github.com/supachai-j/open-knowledge-format-starter/blob/main/wiki/metrics/weekly-active-users.md"
+  click n_84209736 "https://github.com/supachai-j/open-knowledge-format-starter/blob/main/wiki/playbooks/incident-response.md"
+  click n_2ee90f39 "https://github.com/supachai-j/open-knowledge-format-starter/blob/main/wiki/playbooks/index.md"
+  click n_620ec17c "https://github.com/supachai-j/open-knowledge-format-starter/blob/main/wiki/references/index.md"
+  click n_84ac5870 "https://github.com/supachai-j/open-knowledge-format-starter/blob/main/wiki/references/joins/index.md"
+  click n_c61967be "https://github.com/supachai-j/open-knowledge-format-starter/blob/main/wiki/references/joins/orders__customers.md"
+  click n_ea678391 "https://github.com/supachai-j/open-knowledge-format-starter/blob/main/wiki/tables/customers.md"
+  click n_50516fd3 "https://github.com/supachai-j/open-knowledge-format-starter/blob/main/wiki/tables/index.md"
+  click n_17ec6115 "https://github.com/supachai-j/open-knowledge-format-starter/blob/main/wiki/tables/orders.md"
+```
+
+<details>
+<summary>How this example was generated</summary>
+
+```bash
+git clone --depth 1 https://github.com/supachai-j/open-knowledge-format-starter.git /tmp/okf-starter
+okph graph /tmp/okf-starter/wiki \
+  --base-url https://github.com/supachai-j/open-knowledge-format-starter/blob/main/wiki
+```
+
+</details>
+
+## Security & Privacy
+
+- No network calls, no telemetry.
+- No file writes unless explicitly requested.
+- Output is sanitized: labels are escaped and click hrefs only allow `http(s)://` and relative paths.
+- See [PRIVACY.md](./PRIVACY.md) for details.
+
+## License
+
+MIT

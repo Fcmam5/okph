@@ -1,0 +1,69 @@
+{
+  "name": "okph",
+  "version": "0.1.0",
+  "description": "Git-native graph and impact-analysis tool for OKF knowledge bases.",
+  "main": "dist/src/index.mjs",
+  "types": "dist/src/index.d.mts",
+  "bin": {
+    "okph": "dist/bin/okph.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.mts",
+      "default": "./dist/src/index.mjs"
+    }
+  },
+  "files": [
+    "dist",
+    "okf"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "dev": "tsx bin/okph.ts",
+    "typecheck": "tsc --noEmit",
+    "test:cov": "vitest run --coverage",
+    "lint": "pnpx oxlint@latest .",
+    "build": "tsdown"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Fcmam5/okph.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Fcmam5/okph/issues"
+  },
+  "homepage": "https://github.com/Fcmam5/okph#readme",
+  "keywords": [
+    "okf",
+    "mermaid",
+    "graph",
+    "knowledge-base",
+    "markdown",
+    "okph"
+  ],
+  "author": "Abdeldjalil Fortas (Fcmam5)",
+  "license": "MIT",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.5.3",
+      "onFail": "download"
+    }
+  },
+  "type": "module",
+  "dependencies": {
+    "marked": "^18.0.12",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.5.0",
+    "@vitest/coverage-v8": "^5.0.0",
+    "tsdown": "^0.23.0",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.0"
+  }
+}
