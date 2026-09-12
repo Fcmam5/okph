@@ -39,6 +39,8 @@ export interface Graph {
  * - Duplicate edges are collapsed.
  *
  * Pure: no I/O. External links are ignored here (the graph is doc-to-doc).
+ *
+ * @throws If two document paths produce the same node identifier.
  */
 export function buildGraph(docs: readonly GraphInput[]): Graph {
   const known = new Set(docs.map((d) => d.path));
@@ -46,6 +48,11 @@ export function buildGraph(docs: readonly GraphInput[]): Graph {
   const nodes: GraphNode[] = docs
     .map((d) => ({ id: nodeId(d.path), path: d.path, label: d.title }))
     .sort((a, b) => a.path.localeCompare(b.path));
+
+  const ids = new Set(nodes.map((n) => n.id));
+  if (ids.size !== nodes.length) {
+    throw new Error("Node id collision: two documents produced the same node id.");
+  }
 
   const seen = new Set<string>();
   const edges: GraphEdge[] = [];
@@ -62,6 +69,69 @@ export function buildGraph(docs: readonly GraphInput[]): Graph {
   edges.sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to));
 
   return { nodes, edges };
+}
+
+/**
+ * Direct internal dependencies: the paths `file` links to, sorted.
+ * Unknown files yield an empty list.
+ */
+export function getDependencies(graph: Graph, file: string): string[] {
+  return graph.edges
+    .filter((e) => e.from === file)
+    .map((e) => e.to)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * Direct dependents: the paths that link to `file`, sorted.
+ * Unknown files yield an empty list.
+ */
+export function getDependents(graph: Graph, file: string): string[] {
+  return graph.edges
+    .filter((e) => e.to === file)
+    .map((e) => e.from)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * Subgraph containing `file` plus its direct dependencies and dependents:
+ * the file's immediate neighborhood. Unknown files yield an empty graph.
+ */
+export function neighborhood(graph: Graph, file: string): Graph {
+  if (!graph.nodes.some((n) => n.path === file)) {
+    return { nodes: [], edges: [] };
+  }
+  const keep = new Set([file]);
+  for (const e of graph.edges) {
+    if (e.from === file) keep.add(e.to);
+    if (e.to === file) keep.add(e.from);
+  }
+  return {
+    nodes: graph.nodes.filter((n) => keep.has(n.path)),
+    edges: graph.edges.filter((e) => keep.has(e.from) && keep.has(e.to)),
+  };
+}
+
+/**
+ * Directional subgraph: `file` plus its direct dependencies (`"deps"`) or
+ * direct dependents (`"dependents"`), with only the edges in that direction.
+ * Unknown files yield an empty graph.
+ */
+export function subgraph(graph: Graph, file: string, direction: "deps" | "dependents"): Graph {
+  if (!graph.nodes.some((n) => n.path === file)) {
+    return { nodes: [], edges: [] };
+  }
+  const isDeps = direction === "deps";
+  const related = new Set(
+    isDeps ? getDependencies(graph, file) : getDependents(graph, file)
+  );
+  const keep = new Set([file, ...related]);
+  return {
+    nodes: graph.nodes.filter((n) => keep.has(n.path)),
+    edges: graph.edges.filter((e) =>
+      isDeps ? e.from === file && related.has(e.to) : e.to === file && related.has(e.from)
+    ),
+  };
 }
 
 /** Deterministic, collision-resistant, Mermaid-safe node id from a path. */

@@ -11,8 +11,8 @@ export async function discover(root: string): Promise<string[]> {
   const results: string[] = [];
   const queue: string[] = [root];
 
-  while (queue.length > 0) {
-    const dir = queue.shift()!;
+  for (let i = 0; i < queue.length; i++) {
+    const dir = queue[i]!;
     const dh = await opendir(dir);
     for await (const ent of dh) {
       if (IGNORED.has(ent.name) || ent.name.startsWith(".")) continue;
@@ -28,6 +28,19 @@ export async function discover(root: string): Promise<string[]> {
   return results.sort((a, b) => a.localeCompare(b));
 }
 
-function toPosix(p: string): string {
+/** Convert the current platform's path separators to POSIX-style slashes. */
+export function toPosix(p: string): string {
   return p.split(path.sep).join("/");
+}
+
+/**
+ * Resolve `target` (as typed by a user) to a root-relative POSIX path,
+ * or `null` if it escapes `root` or is empty.
+ */
+export function resolveDocPath(root: string, target: string): string | null {
+  const rel = toPosix(path.relative(root, path.resolve(root, target)));
+  if (rel === "" || rel === ".." || rel.startsWith("../") || path.isAbsolute(rel)) {
+    return null;
+  }
+  return rel;
 }

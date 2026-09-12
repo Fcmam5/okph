@@ -1,19 +1,35 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { generateMermaid } from "../src/index.js";
+import {
+  generateMermaid,
+  getDependencies,
+  getDependents,
+  loadGraph,
+  renderMermaid,
+  resolveDocPath,
+  subgraph,
+} from "../src/index.js";
 
 const USAGE = `okph - generate a Mermaid graph of a markdown knowledge base
 
 Usage:
   okph graph <path> [--base-url <url>] [--allow-large]
+  okph deps <file> [--graph]
+  okph dependents <file> [--graph]
 
 Options:
   --base-url <url>  Emit absolute click links joined onto <url>.
                     Omit for relative links (GitHub/GitLab rendered markdown).
   --allow-large     Bypass the 500 node/edge limit and render anyway.
+  --graph           Render deps/dependents as a Mermaid subgraph instead of a list.
   -h, --help        Show this help.
 `;
 
+/**
+ * Handle one CLI invocation, writing results or usage errors to standard streams.
+ * Returns `0` on success and `1` for invalid commands, targets, or documents.
+ * Argument-parsing, filesystem, and graph-rendering errors propagate to the caller.
+ */
 export async function run(argv: string[]): Promise<number> {
   const { values, positionals } = parseArgs({
     args: argv,
@@ -21,6 +37,7 @@ export async function run(argv: string[]): Promise<number> {
     options: {
       "base-url": { type: "string" },
       "allow-large": { type: "boolean" },
+      graph: { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },
   });
@@ -32,13 +49,40 @@ export async function run(argv: string[]): Promise<number> {
 
   const [command, target] = positionals;
 
-  if (command !== "graph") {
+  if (command !== "graph" && command !== "deps" && command !== "dependents") {
     process.stderr.write(`Unknown or missing command: ${command ?? "(none)"}\n\n${USAGE}`);
     return 1;
   }
   if (!target) {
     process.stderr.write(`Missing <path>.\n\n${USAGE}`);
     return 1;
+  }
+
+  if (command === "deps" || command === "dependents") {
+    const root = process.cwd();
+    const rel = resolveDocPath(root, target);
+    if (!rel || !rel.toLowerCase().endsWith(".md")) {
+      process.stderr.write(
+        `Error: ${target} is not a markdown file inside the working directory.\n`
+      );
+      return 1;
+    }
+    const graph = await loadGraph(root);
+    if (!graph.nodes.some((n) => n.path === rel)) {
+      process.stderr.write(`Error: not a known document: ${rel}\n`);
+      return 1;
+    }
+    if (values.graph) {
+      const baseUrl = values["base-url"];
+      process.stdout.write(
+        renderMermaid(subgraph(graph, rel, command), baseUrl ? { baseUrl } : {}) + "\n"
+      );
+      return 0;
+    }
+    const result =
+      command === "deps" ? getDependencies(graph, rel) : getDependents(graph, rel);
+    if (result.length > 0) process.stdout.write(result.join("\n") + "\n");
+    return 0;
   }
 
   const options: { baseUrl?: string; allowLarge?: boolean } = {};

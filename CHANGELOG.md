@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `okph deps <file>` — list direct outgoing links of a document.
+- `okph dependents <file>` — list documents that link to a document.
+- Library API: `loadGraph`, `getDependencies`, `getDependents`, `neighborhood`, `toPosix`.
+- `okph graph <file>` renders the file plus its direct dependencies and dependents.
+- `--graph` flag on `deps`/`dependents` renders the result as a Mermaid subgraph.
+- Library API: `subgraph`.
+
+### Fixed
+
+- `click` hrefs now reject `"`, backticks, backslashes, and control characters (Mermaid directive injection via filenames).
+- Bundle-relative links (`/docs/x.md`) resolve from the bundle root per OKF spec.
+- Percent-encoded link targets (`my%20doc.md`) resolve to on-disk paths.
+- Link fragments are preserved as `ParsedLink.fragment` metadata.
+- Frontmatter is detected after a UTF-8 BOM.
+- H1 titles are flattened to plain text (no raw markdown in labels).
+- `deps`/`dependents` reject empty/out-of-root targets with a clear error.
+
 ## [0.1.1] - 2026-09-12
 
 ### Changed
