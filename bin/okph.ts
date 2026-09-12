@@ -25,6 +25,11 @@ Options:
   -h, --help        Show this help.
 `;
 
+/**
+ * Handle one CLI invocation, writing results or usage errors to standard streams.
+ * Returns `0` on success and `1` for invalid commands, targets, or documents.
+ * Argument-parsing, filesystem, and graph-rendering errors propagate to the caller.
+ */
 export async function run(argv: string[]): Promise<number> {
   const { values, positionals } = parseArgs({
     args: argv,
