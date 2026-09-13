@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-13
+
 ### Added
 
 - `okph deps <file>` — list direct outgoing links of a document.
@@ -20,14 +22,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Library API: `loadGraph(root, { extraPaths })`, `terminalSafe`.
 - Per-file size limit (`MAX_DOC_BYTES`, 5 MiB) when loading documents.
 
-### Security
-
-- Mermaid labels now escape `#`, `&`, `\`, `<`, `>` in addition to quotes and brackets — HTML/entity injection into labels is neutralized for renderers that allow HTML.
-- `click` hrefs percent-encode each path segment: filenames containing `%`, `#`, `?`, spaces, or encoded `..` sequences can no longer escape the base URL or the site root.
-- Absolute `click` URLs must be `http(s)://`; a bare `scheme:` filename (e.g. `https:evil.com.md`) is rejected instead of resolving cross-origin.
-- Filenames containing terminal control characters are JSON-quoted in CLI output (ANSI/log injection via crafted filenames).
-- Git root detection preserves trailing spaces in repository paths.
-
 ### Fixed
 
 - `click` hrefs now reject `"`, backticks, backslashes, and control characters (Mermaid directive injection via filenames).
@@ -37,6 +31,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Frontmatter is detected after a UTF-8 BOM.
 - H1 titles are flattened to plain text (no raw markdown in labels).
 - `deps`/`dependents` reject empty/out-of-root targets with a clear error.
+- Git root detection preserves trailing whitespace in repository paths.
+
+### Security
+
+- Mermaid labels now escape `#`, `&`, `\`, `<`, `>` in addition to quotes and brackets — HTML/entity injection into labels is neutralized for renderers that allow HTML.
+- `click` hrefs percent-encode each path segment: filenames containing `%`, `#`, `?`, spaces, or encoded `..` sequences can no longer escape the base URL or the site root.
+- Absolute `click` URLs must be `http(s)://`; a bare `scheme:` filename (e.g. `https:evil.com.md`) is rejected instead of resolving cross-origin.
+- Filenames containing control or bidirectional-override characters are JSON-quoted in CLI output (terminal/CI-log injection via crafted filenames).
+
+## [0.1.2] - 2026-09-12
+
+### Changed
+
+- First version published to npm, as `@fcmam5/okph`. Install/API docs updated to the scoped name; release workflow environment URL corrected. Content is identical to 0.1.1 — see below.
 
 ## [0.1.1] - 2026-09-12
 
