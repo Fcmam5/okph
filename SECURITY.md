@@ -6,7 +6,8 @@ The following versions of `okph` are currently supported with security updates:
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.1.x   | :white_check_mark: |
+| 0.3.x   | :white_check_mark: |
+| < 0.3   | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -47,6 +48,14 @@ When using `okph` in your application:
 - Validate and sanitize all markdown content before graphing if it comes from untrusted sources
 - Run `okph` offline — it does not make network calls
 - Keep the lockfile committed and review dependency changes in CI
+
+### Known limitations
+
+- Very deeply nested markdown (e.g. thousands of nested blockquotes or list
+  levels, well under the per-file size limit) overflows the stack in the
+  `marked` lexer. `okph` reports the error and exits non-zero; it does not
+  hang or corrupt data. Files deep enough to be a realistic DoS vector are
+  not valid OKF documents.
 
 ## Acknowledgments
 
