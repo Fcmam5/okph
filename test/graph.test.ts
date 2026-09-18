@@ -18,7 +18,7 @@ describe("buildGraph", () => {
 
   it("adds internal edges between existing docs", () => {
     const g = buildGraph(docs);
-    expect(g.edges).toEqual([{ from: "a.md", to: "b.md" }]);
+    expect(g.edges).toEqual([{ from: "a.md", to: "b.md", kind: "cite" }]);
   });
 
   it("drops links to non-existent targets", () => {
@@ -36,6 +36,26 @@ describe("buildGraph", () => {
       ] },
       { path: "b.md", title: "B", links: [] },
     ]);
-    expect(g.edges).toEqual([{ from: "a.md", to: "b.md" }]);
+    expect(g.edges).toEqual([{ from: "a.md", to: "b.md", kind: "cite" }]);
+  });
+
+  it("tags links out of an index file as navigation, at any depth", () => {
+    const g = buildGraph([
+      { path: "index.md", title: "Root", links: [{ text: "B", href: "b.md", kind: "internal" as const, target: "b.md" }] },
+      { path: "docs/index.md", title: "Docs", links: [{ text: "B", href: "../b.md", kind: "internal" as const, target: "b.md" }] },
+      { path: "b.md", title: "B", links: [] },
+    ]);
+    expect(g.edges).toEqual([
+      { from: "docs/index.md", to: "b.md", kind: "nav" },
+      { from: "index.md", to: "b.md", kind: "nav" },
+    ]);
+  });
+
+  it("tags links into an index file as citations", () => {
+    const g = buildGraph([
+      { path: "a.md", title: "A", links: [{ text: "i", href: "index.md", kind: "internal" as const, target: "index.md" }] },
+      { path: "index.md", title: "Root", links: [] },
+    ]);
+    expect(g.edges).toEqual([{ from: "a.md", to: "index.md", kind: "cite" }]);
   });
 });

@@ -44,6 +44,9 @@ Options:
                     Omit for relative links (GitHub/GitLab rendered markdown).
   --allow-large     Bypass the 500 node/edge limit and render anyway.
   --graph           Render deps/dependents/affected as a Mermaid subgraph instead of a list.
+  --include-nav     Count links out of index.md files as dependencies.
+                    By default an index listing is navigation, not reliance,
+                    so index files are not reported as dependents.
   --git <base>      Seed affected from markdown files changed or deleted
                     since <base> (commits, working tree, and untracked files).
                     <base> may be any revision or range, e.g. HEAD~1, main..HEAD.
@@ -64,6 +67,7 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
       "allow-large": { type: "boolean" },
       git: { type: "string" },
       graph: { type: "boolean" },
+      "include-nav": { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },
   });
@@ -77,6 +81,12 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
 
   if (command !== "graph" && !DOC_COMMANDS.has(command ?? "")) {
     process.stderr.write(`Unknown or missing command: ${command ?? "(none)"}\n\n${USAGE}`);
+    return 1;
+  }
+  if (values["include-nav"] && !DOC_COMMANDS.has(command ?? "")) {
+    process.stderr.write(
+      `Error: --include-nav is only supported by the deps, dependents, and affected commands.\n\n${USAGE}`
+    );
     return 1;
   }
   const gitMode = command === "affected" && values.git !== undefined;
@@ -93,6 +103,7 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
     const root = cwd;
     const baseUrl = values["base-url"];
     const renderOpts = baseUrl ? { baseUrl } : {};
+    const walkOpts = { includeNav: values["include-nav"] === true };
 
     if (command === "affected" && values.git !== undefined) {
       const { changed, deleted } = await changedMarkdownFiles(values.git, root);
@@ -109,7 +120,7 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
         process.stderr.write(`No markdown files changed since ${terminalSafe(values.git)}.\n`);
         return 0;
       }
-      emitAffected(graph, getAffected(graph, seeds), values.graph === true, renderOpts);
+      emitAffected(graph, getAffected(graph, seeds, walkOpts), values.graph === true, renderOpts);
       return 0;
     }
 
@@ -131,18 +142,21 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
     }
 
     if (command === "affected") {
-      emitAffected(graph, getAffected(graph, [rel]), values.graph === true, renderOpts);
+      emitAffected(graph, getAffected(graph, [rel], walkOpts), values.graph === true, renderOpts);
       return 0;
     }
 
     if (values.graph) {
       process.stdout.write(
-        renderMermaid(subgraph(graph, rel, command === "deps" ? "deps" : "dependents"), renderOpts) + "\n"
+        renderMermaid(
+          subgraph(graph, rel, command === "deps" ? "deps" : "dependents", walkOpts),
+          renderOpts
+        ) + "\n"
       );
       return 0;
     }
     const result =
-      command === "deps" ? getDependencies(graph, rel) : getDependents(graph, rel);
+      command === "deps" ? getDependencies(graph, rel) : getDependents(graph, rel, walkOpts);
     if (result.length > 0) process.stdout.write(result.join("\n") + "\n");
     return 0;
   }

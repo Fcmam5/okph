@@ -18,10 +18,39 @@ export interface GraphNode {
   readonly label: string;
 }
 
+/**
+ * How a link should be read.
+ *
+ * - `"cite"`: `from` relies on `to`'s content — the edge impact analysis cares
+ *   about.
+ * - `"nav"`: `from` merely enumerates `to`. An OKF index file (spec §8) is a
+ *   directory listing for progressive disclosure, and may be generated
+ *   automatically, so listing a document asserts no reliance on it.
+ */
+export type EdgeKind = "cite" | "nav";
+
 /** A directed edge: `from` links to `to` (both are node paths). */
 export interface GraphEdge {
   readonly from: string;
   readonly to: string;
+  readonly kind: EdgeKind;
+}
+
+/** Options for the dependent-side traversals. */
+export interface TraversalOptions {
+  /**
+   * Walk `"nav"` edges too, so index files count as dependents of everything
+   * they list. Defaults to `false`.
+   */
+  readonly includeNav?: boolean;
+}
+
+/** Matches an OKF index file in any directory, including the bundle root. */
+const INDEX_DOC_RE = /(^|\/)index\.md$/i;
+
+/** Edges eligible for a dependent-side walk. */
+function reverseEdges(graph: Graph, options: TraversalOptions): readonly GraphEdge[] {
+  return options.includeNav ? graph.edges : graph.edges.filter((e) => e.kind === "cite");
 }
 
 /** A resolved document graph. */
@@ -34,7 +63,8 @@ export interface Graph {
  * Build a directed graph from parsed documents.
  *
  * - One node per input document (sorted by path for deterministic output).
- * - One edge per internal link whose target is a known document.
+ * - One edge per internal link whose target is a known document, tagged
+ *   `"nav"` when it leaves an index file and `"cite"` otherwise.
  * - Links to non-existent targets are dropped (broken links are not edges).
  * - Duplicate edges are collapsed.
  *
@@ -63,7 +93,11 @@ export function buildGraph(docs: readonly GraphInput[]): Graph {
       const key = `${doc.path}\u0000${link.target}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      edges.push({ from: doc.path, to: link.target });
+      edges.push({
+        from: doc.path,
+        to: link.target,
+        kind: INDEX_DOC_RE.test(doc.path) ? "nav" : "cite",
+      });
     }
   }
   edges.sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to));
@@ -83,11 +117,16 @@ export function getDependencies(graph: Graph, file: string): string[] {
 }
 
 /**
- * Direct dependents: the paths that link to `file`, sorted.
- * Unknown files yield an empty list.
+ * Direct dependents: the paths that cite `file`, sorted.
+ * Index files are omitted unless `options.includeNav` is set, since listing a
+ * document is not relying on it. Unknown files yield an empty list.
  */
-export function getDependents(graph: Graph, file: string): string[] {
-  return graph.edges
+export function getDependents(
+  graph: Graph,
+  file: string,
+  options: TraversalOptions = {}
+): string[] {
+  return reverseEdges(graph, options)
     .filter((e) => e.to === file)
     .map((e) => e.from)
     .sort((a, b) => a.localeCompare(b));
@@ -117,13 +156,18 @@ export function neighborhood(graph: Graph, file: string): Graph {
  * direct dependents (`"dependents"`), with only the edges in that direction.
  * Unknown files yield an empty graph.
  */
-export function subgraph(graph: Graph, file: string, direction: "deps" | "dependents"): Graph {
+export function subgraph(
+  graph: Graph,
+  file: string,
+  direction: "deps" | "dependents",
+  options: TraversalOptions = {}
+): Graph {
   if (!graph.nodes.some((n) => n.path === file)) {
     return { nodes: [], edges: [] };
   }
   const isDeps = direction === "deps";
   const related = new Set(
-    isDeps ? getDependencies(graph, file) : getDependents(graph, file)
+    isDeps ? getDependencies(graph, file) : getDependents(graph, file, options)
   );
   const keep = new Set([file, ...related]);
   return {
@@ -136,15 +180,22 @@ export function subgraph(graph: Graph, file: string, direction: "deps" | "depend
 
 /**
  * Potentially affected documents: the seeds plus every document that
- * transitively links to them (reverse traversal). Cycle-safe via a visited
- * set. Unknown seeds are ignored; an all-unknown seed list yields [].
+ * transitively cites them (reverse traversal). Navigation edges out of index
+ * files are not followed unless `options.includeNav` is set, so a directory
+ * listing does not make itself affected by everything it lists. Cycle-safe
+ * via a visited set. Unknown seeds are ignored; an all-unknown seed list
+ * yields [].
  *
  * Reachable ≠ definitely affected — callers should phrase output as
  * "potentially affected".
  */
-export function getAffected(graph: Graph, files: readonly string[]): string[] {
+export function getAffected(
+  graph: Graph,
+  files: readonly string[],
+  options: TraversalOptions = {}
+): string[] {
   const incoming = new Map<string, string[]>();
-  for (const e of graph.edges) {
+  for (const e of reverseEdges(graph, options)) {
     const list = incoming.get(e.to);
     if (list) list.push(e.from);
     else incoming.set(e.to, [e.from]);
