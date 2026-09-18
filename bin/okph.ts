@@ -56,9 +56,10 @@ Options:
                     not part of the graph. <file> is still written relative
                     to where you are, and results are printed that way too.
   --graph           Render deps/dependents/affected as a Mermaid subgraph instead of a list.
-  --include-nav     Count links out of index.md files as dependencies.
-                    By default an index listing is navigation, not reliance,
-                    so index files are not reported as dependents.
+  --include-nav     Follow links out of index.md files when walking dependents,
+                    so dependents/affected report index files too. By default
+                    an index listing is navigation, not reliance, and is not
+                    followed. deps is unaffected: it always lists every link.
   --git <base>      Seed affected from markdown files changed or deleted
                     since <base> (commits, working tree, and untracked files).
                     <base> may be any revision or range, e.g. HEAD~1, main..HEAD.
@@ -120,9 +121,12 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
 
   if (command && DOC_COMMANDS.has(command)) {
     const root = values.root === undefined ? cwd : path.resolve(cwd, values.root);
-    if (values.root !== undefined && !(await isDirectory(root))) {
-      process.stderr.write(`Error: --root is not a directory: ${terminalSafe(values.root)}\n`);
-      return 1;
+    if (values.root !== undefined) {
+      const problem = await rootError(root, values.root);
+      if (problem) {
+        process.stderr.write(problem);
+        return 1;
+      }
     }
     const baseUrl = values["base-url"];
     const renderOpts = baseUrl ? { baseUrl } : {};
@@ -213,12 +217,20 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
   return 0;
 }
 
-/** True when `p` exists and is a directory. */
-async function isDirectory(p: string): Promise<boolean> {
+/**
+ * Check a user-supplied `--root`, returning an error line or `null`.
+ * A missing path and an unreadable one are reported differently, so a
+ * permissions or I/O failure is not mistaken for a typo.
+ */
+async function rootError(resolved: string, asTyped: string): Promise<string | null> {
+  const shown = terminalSafe(asTyped);
   try {
-    return (await stat(p)).isDirectory();
-  } catch {
-    return false;
+    if ((await stat(resolved)).isDirectory()) return null;
+    return `Error: --root is not a directory: ${shown}\n`;
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") return `Error: --root does not exist: ${shown}\n`;
+    return `Error: cannot read --root ${shown}: ${code ?? "unknown error"}\n`;
   }
 }
 

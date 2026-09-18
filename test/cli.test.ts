@@ -95,10 +95,16 @@ describe("run", () => {
     expect(stderr).toContain("is not a markdown file inside docs");
   });
 
-  it("rejects a --root that is not a directory", async () => {
+  it("rejects a --root that does not exist", async () => {
     const { code, stderr } = await capture(["deps", "a.md", "--root", "nope"], repo);
     expect(code).toBe(1);
-    expect(stderr).toContain("--root is not a directory: nope");
+    expect(stderr).toContain("--root does not exist: nope");
+  });
+
+  it("rejects a --root that is a file, not a directory", async () => {
+    const { code, stderr } = await capture(["deps", "a.md", "--root", "a.md"], repo);
+    expect(code).toBe(1);
+    expect(stderr).toContain("--root is not a directory: a.md");
   });
 
   it("rejects --root on the graph command", async () => {
