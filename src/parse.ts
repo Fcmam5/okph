@@ -154,7 +154,27 @@ function safeDecode(p: string): string {
 function walk(tokens: Token[], visit: (token: Token) => void): void {
   for (const token of tokens) {
     visit(token);
-    const children = (token as { tokens?: Token[] }).tokens;
-    if (children) walk(children, visit);
+    for (const children of childTokens(token)) walk(children, visit);
+  }
+}
+
+/**
+ * Child token arrays of a marked token, in document order. Lists hold their
+ * entries in `items` and tables in `header`/`rows`, so following `tokens`
+ * alone would miss every link inside a bullet or a table cell — including the
+ * whole body of an OKF index file.
+ */
+function* childTokens(token: Token): Generator<Token[]> {
+  const t = token as {
+    tokens?: Token[];
+    items?: Token[];
+    header?: { tokens?: Token[] }[];
+    rows?: { tokens?: Token[] }[][];
+  };
+  if (t.tokens) yield t.tokens;
+  if (t.items) yield t.items;
+  for (const cell of t.header ?? []) if (cell.tokens) yield cell.tokens;
+  for (const row of t.rows ?? []) {
+    for (const cell of row) if (cell.tokens) yield cell.tokens;
   }
 }

@@ -49,6 +49,31 @@ describe("parseDoc links", () => {
     const doc = parseDoc("[X](100%.md)", "a.md");
     expect(doc.links[0]!.target).toBe("100%.md");
   });
+
+  it("finds links inside list items", () => {
+    const doc = parseDoc("* [B](b.md) - one\n* [C](c.md) - two\n", "index.md");
+    expect(doc.links.map((l) => l.target)).toEqual(["b.md", "c.md"]);
+  });
+
+  it("finds links inside nested list items", () => {
+    const doc = parseDoc("* group\n  * [B](b.md)\n", "index.md");
+    expect(doc.links.map((l) => l.target)).toEqual(["b.md"]);
+  });
+
+  it("finds links inside table cells", () => {
+    const doc = parseDoc("| Doc | Note |\n|---|---|\n| [B](b.md) | see [C](c.md) |\n", "a.md");
+    expect(doc.links.map((l) => l.target)).toEqual(["b.md", "c.md"]);
+  });
+
+  it("finds links inside blockquotes", () => {
+    const doc = parseDoc("> see [B](b.md)\n", "a.md");
+    expect(doc.links.map((l) => l.target)).toEqual(["b.md"]);
+  });
+
+  it("reports each distinct link once per occurrence, in document order", () => {
+    const doc = parseDoc("[B](b.md)\n\n* [C](c.md)\n\n[B](b.md)\n", "a.md");
+    expect(doc.links.map((l) => l.target)).toEqual(["b.md", "c.md", "b.md"]);
+  });
 });
 
 describe("parseDoc title", () => {
