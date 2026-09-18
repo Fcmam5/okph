@@ -21,6 +21,15 @@ describe("renderMermaid", () => {
     expect(out).toContain(`${idOf("a.md")} --> ${idOf("b.md")}`);
   });
 
+  it("draws navigation edges dotted", () => {
+    const g = buildGraph([
+      { path: "index.md", title: "Index", links: [{ text: "A", href: "a.md", kind: "internal", target: "a.md" }] },
+      { path: "a.md", title: "A", links: [] },
+    ]);
+    const id = (p: string) => g.nodes.find((n) => n.path === p)!.id;
+    expect(renderMermaid(g)).toContain(`${id("index.md")} -.-> ${id("a.md")}`);
+  });
+
   it("emits relative click directives when no base url", () => {
     expect(renderMermaid(graph)).toContain(`click ${idOf("a.md")} "a.md"`);
   });

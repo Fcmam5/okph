@@ -44,9 +44,9 @@ describe("neighborhood", () => {
       "settlement.md",
     ]);
     expect(sub.edges).toEqual([
-      { from: "payments.md", to: "settlement.md" },
-      { from: "settlement.md", to: "ledger.md" },
-      { from: "settlement.md", to: "reconciliation.md" },
+      { from: "payments.md", to: "settlement.md", kind: "cite" },
+      { from: "settlement.md", to: "ledger.md", kind: "cite" },
+      { from: "settlement.md", to: "reconciliation.md", kind: "cite" },
     ]);
   });
 });
@@ -61,8 +61,8 @@ describe("subgraph", () => {
       "settlement.md",
     ]);
     expect(sub.edges).toEqual([
-      { from: "settlement.md", to: "ledger.md" },
-      { from: "settlement.md", to: "reconciliation.md" },
+      { from: "settlement.md", to: "ledger.md", kind: "cite" },
+      { from: "settlement.md", to: "reconciliation.md", kind: "cite" },
     ]);
   });
 
@@ -70,7 +70,7 @@ describe("subgraph", () => {
     const g = buildGraph(docs);
     const sub = subgraph(g, "settlement.md", "dependents");
     expect(sub.nodes.map((n) => n.path)).toEqual(["payments.md", "settlement.md"]);
-    expect(sub.edges).toEqual([{ from: "payments.md", to: "settlement.md" }]);
+    expect(sub.edges).toEqual([{ from: "payments.md", to: "settlement.md", kind: "cite" }]);
   });
 
   it("returns an empty graph for unknown files", () => {
@@ -116,6 +116,67 @@ describe("getAffected", () => {
   });
 });
 
+// An index file listing every sibling, per OKF §8.
+const withIndex = [
+  ...docs,
+  { path: "index.md", title: "Index", links: [
+    { text: "l", href: "ledger.md", kind: "internal" as const, target: "ledger.md" },
+    { text: "p", href: "payments.md", kind: "internal" as const, target: "payments.md" },
+  ] },
+];
+
+describe("navigation edges", () => {
+  it("keeps index files out of dependents and affected by default", () => {
+    const g = buildGraph(withIndex);
+    expect(getDependents(g, "ledger.md")).toEqual(["settlement.md"]);
+    expect(getAffected(g, ["ledger.md"])).toEqual([
+      "ledger.md",
+      "payments.md",
+      "settlement.md",
+    ]);
+  });
+
+  it("walks them when includeNav is set", () => {
+    const g = buildGraph(withIndex);
+    expect(getDependents(g, "ledger.md", { includeNav: true })).toEqual([
+      "index.md",
+      "settlement.md",
+    ]);
+    expect(getAffected(g, ["ledger.md"], { includeNav: true })).toEqual([
+      "index.md",
+      "ledger.md",
+      "payments.md",
+      "settlement.md",
+    ]);
+  });
+
+  it("still reports what an index lists as its dependencies", () => {
+    const g = buildGraph(withIndex);
+    expect(getDependencies(g, "index.md")).toEqual(["ledger.md", "payments.md"]);
+  });
+
+  it("still reports citations of an index file", () => {
+    const g = buildGraph([
+      ...withIndex,
+      { path: "guide.md", title: "Guide", links: [{ text: "i", href: "index.md", kind: "internal" as const, target: "index.md" }] },
+    ]);
+    expect(getDependents(g, "index.md")).toEqual(["guide.md"]);
+  });
+
+  it("drops the index from a dependents subgraph but keeps it in the neighborhood", () => {
+    const g = buildGraph(withIndex);
+    expect(subgraph(g, "ledger.md", "dependents").nodes.map((n) => n.path)).toEqual([
+      "ledger.md",
+      "settlement.md",
+    ]);
+    expect(neighborhood(g, "ledger.md").nodes.map((n) => n.path)).toEqual([
+      "index.md",
+      "ledger.md",
+      "settlement.md",
+    ]);
+  });
+});
+
 describe("inducedSubgraph", () => {
   it("keeps only the given nodes and the edges between them", () => {
     const g = buildGraph(docs);
@@ -126,8 +187,8 @@ describe("inducedSubgraph", () => {
       "settlement.md",
     ]);
     expect(sub.edges).toEqual([
-      { from: "payments.md", to: "settlement.md" },
-      { from: "settlement.md", to: "ledger.md" },
+      { from: "payments.md", to: "settlement.md", kind: "cite" },
+      { from: "settlement.md", to: "ledger.md", kind: "cite" },
     ]);
   });
 });

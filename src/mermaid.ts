@@ -33,7 +33,9 @@ export function renderMermaid(graph: Graph, options: RenderOptions = {}): string
   for (const edge of graph.edges) {
     const from = idByPath.get(edge.from);
     const to = idByPath.get(edge.to);
-    if (from && to) lines.push(`  ${from} --> ${to}`);
+    // Navigation edges (index listings) are dotted so the citation graph
+    // stays legible underneath them.
+    if (from && to) lines.push(`  ${from} ${edge.kind === "nav" ? "-.->" : "-->"} ${to}`);
   }
 
   for (const node of graph.nodes) {

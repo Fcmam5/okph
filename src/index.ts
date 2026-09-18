@@ -21,7 +21,14 @@ export { renderMermaid } from "./mermaid.js";
 export { safeHref, escapeLabel, terminalSafe } from "./security.js";
 export { changedMarkdownFiles } from "./git.js";
 export type { ParsedDoc, ParsedLink } from "./parse.js";
-export type { Graph, GraphNode, GraphEdge, GraphInput } from "./graph.js";
+export type {
+  EdgeKind,
+  Graph,
+  GraphNode,
+  GraphEdge,
+  GraphInput,
+  TraversalOptions,
+} from "./graph.js";
 export type { RenderOptions } from "./mermaid.js";
 
 /** Options for {@link loadGraph}. */
@@ -73,7 +80,7 @@ export async function loadGraph(root: string, options: LoadGraphOptions = {}): P
  *
  * A directory renders its complete document graph. A file renders that
  * document's immediate neighborhood, using its containing directory as the
- * graph root.
+ * graph root. Navigation edges are kept and drawn dotted.
  * Offline and read-only: it returns a string and sanitizes untrusted content
  * during rendering.
  *
