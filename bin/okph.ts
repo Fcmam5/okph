@@ -56,10 +56,9 @@ Options:
                     not part of the graph. <file> is still written relative
                     to where you are, and results are printed that way too.
   --graph           Render deps/dependents/affected as a Mermaid subgraph instead of a list.
-  --include-nav     Follow links out of index.md files when walking dependents,
-                    so dependents/affected report index files too. By default
-                    an index listing is navigation, not reliance, and is not
-                    followed. deps is unaffected: it always lists every link.
+  --include-nav     Count index.md links as dependencies in dependents and
+                    affected. Off by default (OKF §8); deps always lists
+                    every link.
   --git <base>      Seed affected from markdown files changed or deleted
                     since <base> (commits, working tree, and untracked files).
                     <base> may be any revision or range, e.g. HEAD~1, main..HEAD.
@@ -94,7 +93,9 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
   const [command, target] = positionals;
 
   if (command !== "graph" && !DOC_COMMANDS.has(command ?? "")) {
-    process.stderr.write(`Unknown or missing command: ${command ?? "(none)"}\n\n${USAGE}`);
+    process.stderr.write(
+      `Unknown or missing command: ${command === undefined ? "(none)" : terminalSafe(command)}\n\n${USAGE}`
+    );
     return 1;
   }
   if (values["include-nav"] && !DOC_COMMANDS.has(command ?? "")) {
@@ -167,7 +168,9 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
     const rel = resolveDocPath(root, target, cwd);
     if (!rel || !rel.toLowerCase().endsWith(".md")) {
       const scope = values.root === undefined ? "the working directory" : terminalSafe(values.root);
-      process.stderr.write(`Error: ${target} is not a markdown file inside ${scope}.\n`);
+      process.stderr.write(
+        `Error: ${terminalSafe(target)} is not a markdown file inside ${scope}.\n`
+      );
       return 1;
     }
     const graph = await loadGraph(root);

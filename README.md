@@ -42,7 +42,9 @@ Files outside `<dir>` are not scanned and never appear in the output. You still 
 
 ### Index files
 
-An OKF `index.md` is a directory listing (spec §8) and may be generated automatically, so listing a document is not the same as relying on it. Links out of an `index.md` are treated as navigation: they never make the index a dependent, and `affected` does not report it. The index still appears in `graph` output, drawn with a dotted arrow, and `deps index.md` still lists what it points at. Pass `--include-nav` to count these links as ordinary dependencies.
+`index.md` is a directory listing (spec §8), so its links don't count as dependencies — an index never shows up in `dependents` or `affected`. It's still in `graph` output, with a dotted arrow, and `deps index.md` still works.
+
+`--include-nav` turns that off. You shouldn't need it: spec §3.1 says `index.md` can't be a concept document, so real content in an index means the bundle is wrong.
 
 `graph` output is Mermaid graph syntax printed to stdout. Pipe it to a file or Mermaid renderer.
 
