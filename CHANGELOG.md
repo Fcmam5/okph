@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `--root <dir>` on `deps`/`dependents`/`affected` — scan only that directory. Use it to keep repo files like `README.md` and `CONTRIBUTING.md` out of the graph when you run from a repo root. You still type `<file>` and read results relative to where you are.
+- `--include-nav` on `deps`/`dependents`/`affected` — treat links out of `index.md` as normal dependencies again (see Changed).
+
+### Changed
+
+- Links out of an `index.md` no longer count as dependencies. An OKF index file is a directory listing (spec §8) and may be generated automatically, so listing a document is not relying on it. An index is no longer reported as a dependent and no longer shows up in `affected`. It is still drawn in `graph`, now with a dotted arrow, and `deps index.md` still lists what it points at.
+- `GraphEdge` has a new `kind` field, `"cite"` or `"nav"`. Breaking if you build edges by hand.
+
+### Fixed
+
+- Links inside list items and table cells were skipped. Only links in paragraphs and headings became edges, so an `index.md` — which is nothing but a list of links — produced no edges at all. Expect more edges than before, and more results from `dependents` and `affected`.
+
 ## [0.2.0] - 2026-09-13
 
 ### Added

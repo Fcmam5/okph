@@ -23,13 +23,30 @@ okph affected docs/ledger.md      # ledger.md + everything transitively linking 
 okph affected docs/ledger.md --graph
 okph affected --git HEAD~1         # changed markdown since HEAD~1 + their dependents
 okph affected --git main --graph
+okph affected --git main --root docs  # only look at docs/, ignore the rest of the repo
 ```
 
 `deps`/`dependents`/`affected` scan the knowledge base from the current working directory and print sorted paths, one per line — no Mermaid. Paths are relative to your cwd, so run from the repo root for repo-relative output. `affected` means *potentially* affected: reachable through links, not necessarily impacted. Links are read as citations — `a → b` means "a relies on b's content", so `affected b.md` reports `b.md` plus everything that cites it, transitively. `affected --git <base>` seeds from markdown files changed or deleted since `<base>` (commits, working tree, and untracked files), then reports those files plus their transitive dependents — useful for "what might need review after this branch" checks.
 
+### Keeping repo files out of the graph
+
+Run from a repo root and the scan picks up `README.md`, `CONTRIBUTING.md` and friends. If your README links into the knowledge base, it cites those documents and shows up in every `affected` result.
+
+Use `--root <dir>` to scan only the knowledge base:
+
+```bash
+okph affected --git main --root docs
+```
+
+Files outside `<dir>` are not scanned and never appear in the output. You still write `<file>` and read results relative to where you are, so `--root docs` still prints `docs/ledger.md`.
+
+### Index files
+
+An OKF `index.md` is a directory listing (spec §8) and may be generated automatically, so listing a document is not the same as relying on it. Links out of an `index.md` are treated as navigation: they never make the index a dependent, and `affected` does not report it. The index still appears in `graph` output, drawn with a dotted arrow, and `deps index.md` still lists what it points at. Pass `--include-nav` to count these links as ordinary dependencies.
+
 `graph` output is Mermaid graph syntax printed to stdout. Pipe it to a file or Mermaid renderer.
 
-Note on scan scope: `graph <path>` recursively reads every `.md` file under `<path>` — including paths outside your cwd (e.g. `okph graph /some/dir`). `deps`/`dependents`/`affected` always scan from the current working directory.
+Note on scan scope: `graph <path>` recursively reads every `.md` file under `<path>` — including paths outside your cwd (e.g. `okph graph /some/dir`). `deps`/`dependents`/`affected` scan from the current working directory, or from `--root <dir>` when given.
 
 Graphs over 500 nodes or edges fail by default, since many renderers (e.g. GitHub) truncate them. Pass `--allow-large` to render anyway.
 

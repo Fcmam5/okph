@@ -36,9 +36,13 @@ export function toPosix(p: string): string {
 /**
  * Resolve `target` (as typed by a user) to a root-relative POSIX path,
  * or `null` if it escapes `root` or is empty.
+ *
+ * `from` is the directory the user typed `target` against — their shell's cwd.
+ * It defaults to `root`, and differs from it when the scan root was narrowed
+ * with `--root`.
  */
-export function resolveDocPath(root: string, target: string): string | null {
-  const rel = toPosix(path.relative(root, path.resolve(root, target)));
+export function resolveDocPath(root: string, target: string, from: string = root): string | null {
+  const rel = toPosix(path.relative(root, path.resolve(from, target)));
   if (rel === "" || rel === ".." || rel.startsWith("../") || path.isAbsolute(rel)) {
     return null;
   }
