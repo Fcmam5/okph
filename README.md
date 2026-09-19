@@ -1,5 +1,9 @@
 # OKPH
 
+[![CI](https://github.com/Fcmam5/okph/actions/workflows/main.yml/badge.svg)](https://github.com/Fcmam5/okph/actions/workflows/main.yml)
+[![npm](https://img.shields.io/npm/v/@fcmam5/okph)](https://www.npmjs.com/package/@fcmam5/okph)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Git-native graph and impact-analysis tool for OKF knowledge bases. Generates a clickable Mermaid graph from a folder of Markdown files (default output; other formats may follow).
 
 ## Install
