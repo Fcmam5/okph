@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-19
+
 ### Changed
 
 - `GraphEdge.kind` and the `EdgeKind` type are gone — breaking. Whether a link is a dependency is now decided from the filename at traversal time, via `isReservedFile()`. Same rule, one more file: `log.md` mentions no longer count as dependencies either. `--include-nav` covers both.
