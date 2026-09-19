@@ -33,6 +33,18 @@ export function toPosix(p: string): string {
   return p.split(path.sep).join("/");
 }
 
+const RESERVED_RE = /(^|\/)(index|log)\.md$/i;
+
+/**
+ * True for OKF reserved filenames (spec §3.1): `index.md` directory listings
+ * and `log.md` update histories, at any depth. Links out of them enumerate
+ * or chronicle documents rather than relying on them, so they are not
+ * dependency edges for analysis.
+ */
+export function isReservedFile(relPath: string): boolean {
+  return RESERVED_RE.test(relPath);
+}
+
 /**
  * Resolve `target` (as typed by a user) to a root-relative POSIX path,
  * or `null` if it escapes `root` or is empty.

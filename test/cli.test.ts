@@ -107,6 +107,42 @@ describe("run", () => {
     expect(stderr).toContain("--root is not a directory: a.md");
   });
 
+  it("--md prints results as a markdown link list", async () => {
+    const { code, stdout } = await capture(
+      ["affected", "docs/topic.md", "--root", "docs", "--md"],
+      repo
+    );
+    expect(code).toBe(0);
+    expect(stdout.split("\n").filter(Boolean)).toEqual([
+      "- [Guide](docs/guide.md)",
+      "- [Topic](docs/topic.md)",
+    ]);
+  });
+
+  it("--md angle-wraps hrefs containing parens", async () => {
+    await writeFile(path.join(repo, "docs", "a).md"), "# Paren\n\n[t](topic.md)\n");
+    const { stdout } = await capture(
+      ["affected", "docs/topic.md", "--root", "docs", "--md"],
+      repo
+    );
+    expect(stdout).toContain("- [Paren](<docs/a).md>)");
+    await rm(path.join(repo, "docs", "a).md"));
+  });
+
+  it("--md honors --base-url with absolute links", async () => {
+    const { stdout } = await capture(
+      ["affected", "docs/topic.md", "--root", "docs", "--md", "--base-url", "https://gh.com/o/r/blob/main"],
+      repo
+    );
+    expect(stdout).toContain("- [Guide](https://gh.com/o/r/blob/main/docs/guide.md)");
+  });
+
+  it("rejects --md on non-doc commands", async () => {
+    const { code, stderr } = await capture(["graph", ".", "--md"], repo);
+    expect(code).toBe(1);
+    expect(stderr).toContain("--md is only supported by");
+  });
+
   it("rejects --root on the graph command", async () => {
     const { code, stderr } = await capture(["graph", ".", "--root", "docs"], repo);
     expect(code).toBe(1);

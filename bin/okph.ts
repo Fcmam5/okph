@@ -14,6 +14,7 @@ import {
   loadGraph,
   renderMermaid,
   resolveDocPath,
+  safeHref,
   subgraph,
   terminalSafe,
   toPosix,
@@ -23,19 +24,42 @@ import {
 
 const DOC_COMMANDS = new Set(["deps", "dependents", "affected"]);
 
-/** Print the affected set as a Mermaid subgraph or a sorted path list. */
+/** `- [Title](path)` lines for `--md` output. */
+function mdLines(
+  graph: Graph,
+  paths: readonly string[],
+  display: (rel: string) => string,
+  baseUrl?: string
+): string[] {
+  const labelOf = new Map(graph.nodes.map((n) => [n.path, n.label]));
+  return paths.map((rel) => {
+    const label = terminalSafe(labelOf.get(rel) ?? rel).replace(/[[\]]/g, "");
+    const href = safeHref(display(rel), baseUrl);
+    if (href === null) return `- ${label}`;
+    // Angle-wrapped destinations are the CommonMark escape for parens in
+    // filenames — encodeURIComponent leaves `()` alone.
+    const dest = /[()]/.test(href) ? `<${href}>` : href;
+    return `- [${label}](${dest})`;
+  });
+}
+
+/** Print the affected set as a Mermaid subgraph, markdown list, or sorted path list. */
 function emitAffected(
   graph: Graph,
   affected: string[],
   useGraph: boolean,
   renderOpts: { baseUrl?: string },
-  display: (rel: string) => string
+  display: (rel: string) => string,
+  md: boolean
 ) {
   if (useGraph) {
     process.stdout.write(renderMermaid(inducedSubgraph(graph, affected), renderOpts) + "\n");
   } else {
     process.stderr.write("Potentially affected documents:\n");
-    process.stdout.write(affected.map((p) => terminalSafe(display(p))).join("\n") + "\n");
+    const lines = md
+      ? mdLines(graph, affected, display, renderOpts.baseUrl)
+      : affected.map((p) => terminalSafe(display(p)));
+    process.stdout.write(lines.join("\n") + "\n");
   }
 }
 
@@ -43,24 +67,25 @@ const USAGE = `okph - generate a Mermaid graph of a markdown knowledge base
 
 Usage:
   okph graph <path> [--base-url <url>] [--allow-large]
-  okph deps <file> [--root <dir>] [--graph]
-  okph dependents <file> [--root <dir>] [--graph]
-  okph affected <file> [--root <dir>] [--graph]
-  okph affected --git <base> [--root <dir>] [--graph]
+  okph deps <file> [--root <dir>] [--graph] [--md]
+  okph dependents <file> [--root <dir>] [--graph] [--md]
+  okph affected <file> [--root <dir>] [--graph] [--md]
+  okph affected --git <base> [--root <dir>] [--graph] [--md]
   okph validate [path] [--strict]
 
 Options:
-  --base-url <url>  Emit absolute click links joined onto <url>.
-                    Omit for relative links (GitHub/GitLab rendered markdown).
+  --base-url <url>  Emit absolute links joined onto <url> (graph clicks and
+                    --md links). Omit for relative links.
   --allow-large     Bypass the 500 node/edge limit and render anyway.
   --root <dir>      Scan <dir> instead of the current directory, so files
                     outside it (a repo README, CONTRIBUTING, .github/) are
                     not part of the graph. <file> is still written relative
                     to where you are, and results are printed that way too.
   --graph           Render deps/dependents/affected as a Mermaid subgraph instead of a list.
-  --include-nav     Count index.md links as dependencies in dependents and
-                    affected. Off by default (OKF §8); deps always lists
-                    every link.
+  --md              Print deps/dependents/affected as a markdown link list (\`- [Title](path)\`).
+  --include-nav     Count index.md/log.md links as dependencies in dependents
+                    and affected. Off by default (OKF §3.1); deps always
+                    lists every link.
   --git <base>      Seed affected from markdown files changed or deleted
                     since <base> (commits, working tree, and untracked files).
                     <base> may be any revision or range, e.g. HEAD~1, main..HEAD.
@@ -83,6 +108,7 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
       git: { type: "string" },
       graph: { type: "boolean" },
       "include-nav": { type: "boolean" },
+      md: { type: "boolean" },
       root: { type: "string" },
       strict: { type: "boolean" },
       help: { type: "boolean", short: "h" },
@@ -105,6 +131,12 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
   if (values["include-nav"] && !DOC_COMMANDS.has(command ?? "")) {
     process.stderr.write(
       `Error: --include-nav is only supported by the deps, dependents, and affected commands.\n\n${USAGE}`
+    );
+    return 1;
+  }
+  if (values.md && !DOC_COMMANDS.has(command ?? "")) {
+    process.stderr.write(
+      `Error: --md is only supported by the deps, dependents, and affected commands.\n\n${USAGE}`
     );
     return 1;
   }
@@ -160,7 +192,8 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
         getAffected(graph, seeds, walkOpts),
         values.graph === true,
         renderOpts,
-        display
+        display,
+        values.md === true
       );
       return 0;
     }
@@ -189,7 +222,8 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
         getAffected(graph, [rel], walkOpts),
         values.graph === true,
         renderOpts,
-        display
+        display,
+        values.md === true
       );
       return 0;
     }
@@ -206,7 +240,10 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
     const result =
       command === "deps" ? getDependencies(graph, rel) : getDependents(graph, rel, walkOpts);
     if (result.length > 0) {
-      process.stdout.write(result.map((p) => terminalSafe(display(p))).join("\n") + "\n");
+      const lines = values.md === true
+        ? mdLines(graph, result, display, renderOpts.baseUrl)
+        : result.map((p) => terminalSafe(display(p)));
+      process.stdout.write(lines.join("\n") + "\n");
     }
     return 0;
   }

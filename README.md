@@ -1,5 +1,9 @@
 # OKPH
 
+[![CI](https://github.com/Fcmam5/okph/actions/workflows/main.yml/badge.svg)](https://github.com/Fcmam5/okph/actions/workflows/main.yml)
+[![npm](https://img.shields.io/npm/v/@fcmam5/okph)](https://www.npmjs.com/package/@fcmam5/okph)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Git-native graph and impact-analysis tool for OKF knowledge bases. Generates a clickable Mermaid graph from a folder of Markdown files (default output; other formats may follow).
 
 ## Install
@@ -24,6 +28,7 @@ okph affected docs/ledger.md --graph
 okph affected --git HEAD~1         # changed markdown since HEAD~1 + their dependents
 okph affected --git main --graph
 okph affected --git main --root docs  # only look at docs/, ignore the rest of the repo
+okph affected --git main --root docs --md  # same, as a markdown link list
 okph validate ./docs                  # check the bundle against the OKF spec
 okph validate ./docs --strict         # also fail on warnings (CI gate)
 ```
@@ -46,9 +51,9 @@ Files outside `<dir>` are not scanned and never appear in the output. You still 
 
 ### Index files
 
-`index.md` is a directory listing (spec §8), so its links don't count as dependencies — an index never shows up in `dependents` or `affected`. It's still in `graph` output, with a dotted arrow, and `deps index.md` still works.
+`index.md` and `log.md` are reserved files (spec §3.1): a listing enumerates documents and a log chronicles them — neither relies on them. So links *out of* them don't count as dependencies: they never get added as dependents, and `affected` doesn't propagate through them. Links *to* them still count, and naming one directly works — `deps index.md` lists its links, `dependents index.md` reports what links to it, `affected index.md` includes it as a seed. They're drawn dotted in `graph` output.
 
-`--include-nav` turns that off. You shouldn't need it: spec §3.1 says `index.md` can't be a concept document, so real content in an index means the bundle is wrong.
+`--include-nav` turns that off. You shouldn't need it: spec §3.1 says reserved files can't be concept documents, so real content in one means the bundle is wrong.
 
 `graph` output is Mermaid graph syntax printed to stdout. Pipe it to a file or Mermaid renderer.
 

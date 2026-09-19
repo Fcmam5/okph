@@ -7,7 +7,7 @@ import { buildGraph, neighborhood, type Graph, type GraphInput } from "./graph.j
 import { renderMermaid, type RenderOptions } from "./mermaid.js";
 import { terminalSafe } from "./security.js";
 
-export { discover, toPosix, resolveDocPath } from "./discover.js";
+export { discover, toPosix, resolveDocPath, isReservedFile } from "./discover.js";
 export { parseDoc } from "./parse.js";
 export {
   buildGraph,
@@ -25,7 +25,6 @@ export { validate } from "./validate.js";
 export type { Diagnostic, DiagnosticLevel, ValidateResult } from "./validate.js";
 export type { ParsedDoc, ParsedLink } from "./parse.js";
 export type {
-  EdgeKind,
   Graph,
   GraphNode,
   GraphEdge,
