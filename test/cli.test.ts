@@ -119,6 +119,16 @@ describe("run", () => {
     ]);
   });
 
+  it("--md angle-wraps hrefs containing parens", async () => {
+    await writeFile(path.join(repo, "docs", "a).md"), "# Paren\n\n[t](topic.md)\n");
+    const { stdout } = await capture(
+      ["affected", "docs/topic.md", "--root", "docs", "--md"],
+      repo
+    );
+    expect(stdout).toContain("- [Paren](<docs/a).md>)");
+    await rm(path.join(repo, "docs", "a).md"));
+  });
+
   it("--md honors --base-url with absolute links", async () => {
     const { stdout } = await capture(
       ["affected", "docs/topic.md", "--root", "docs", "--md", "--base-url", "https://gh.com/o/r/blob/main"],

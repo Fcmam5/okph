@@ -35,7 +35,11 @@ function mdLines(
   return paths.map((rel) => {
     const label = terminalSafe(labelOf.get(rel) ?? rel).replace(/[[\]]/g, "");
     const href = safeHref(display(rel), baseUrl);
-    return href === null ? `- ${label}` : `- [${label}](${href})`;
+    if (href === null) return `- ${label}`;
+    // Angle-wrapped destinations are the CommonMark escape for parens in
+    // filenames — encodeURIComponent leaves `()` alone.
+    const dest = /[()]/.test(href) ? `<${href}>` : href;
+    return `- [${label}](${dest})`;
   });
 }
 

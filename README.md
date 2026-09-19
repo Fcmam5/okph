@@ -51,7 +51,7 @@ Files outside `<dir>` are not scanned and never appear in the output. You still 
 
 ### Index files
 
-`index.md` and `log.md` are reserved files (spec §3.1): a listing enumerates documents and a log chronicles them — neither relies on them. So their links don't count as dependencies: a reserved file never shows up in `dependents` or `affected`. They're still drawn in `graph` output, with dotted arrows, and `deps index.md` still works.
+`index.md` and `log.md` are reserved files (spec §3.1): a listing enumerates documents and a log chronicles them — neither relies on them. So links *out of* them don't count as dependencies: they never get added as dependents, and `affected` doesn't propagate through them. Links *to* them still count, and naming one directly works — `deps index.md` lists its links, `dependents index.md` reports what links to it, `affected index.md` includes it as a seed. They're drawn dotted in `graph` output.
 
 `--include-nav` turns that off. You shouldn't need it: spec §3.1 says reserved files can't be concept documents, so real content in one means the bundle is wrong.
 
