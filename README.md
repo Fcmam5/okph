@@ -46,9 +46,9 @@ Files outside `<dir>` are not scanned and never appear in the output. You still 
 
 ### Index files
 
-`index.md` is a directory listing (spec §8), so its links don't count as dependencies — an index never shows up in `dependents` or `affected`. It's still in `graph` output, with a dotted arrow, and `deps index.md` still works.
+`index.md` and `log.md` are reserved files (spec §3.1): a listing enumerates documents and a log chronicles them — neither relies on them. So their links don't count as dependencies: a reserved file never shows up in `dependents` or `affected`. They're still drawn in `graph` output, with dotted arrows, and `deps index.md` still works.
 
-`--include-nav` turns that off. You shouldn't need it: spec §3.1 says `index.md` can't be a concept document, so real content in an index means the bundle is wrong.
+`--include-nav` turns that off. You shouldn't need it: spec §3.1 says reserved files can't be concept documents, so real content in one means the bundle is wrong.
 
 `graph` output is Mermaid graph syntax printed to stdout. Pipe it to a file or Mermaid renderer.
 

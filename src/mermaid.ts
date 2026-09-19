@@ -1,4 +1,5 @@
 import type { Graph } from "./graph.js";
+import { isReservedFile } from "./discover.js";
 import { escapeLabel, safeHref } from "./security.js";
 
 /** Options controlling Mermaid rendering. */
@@ -33,9 +34,9 @@ export function renderMermaid(graph: Graph, options: RenderOptions = {}): string
   for (const edge of graph.edges) {
     const from = idByPath.get(edge.from);
     const to = idByPath.get(edge.to);
-    // Navigation edges (index listings) are dotted so the citation graph
-    // stays legible underneath them.
-    if (from && to) lines.push(`  ${from} ${edge.kind === "nav" ? "-.->" : "-->"} ${to}`);
+    // Edges out of reserved files (index listings, logs) are dotted so the
+    // citation graph stays legible underneath them.
+    if (from && to) lines.push(`  ${from} ${isReservedFile(edge.from) ? "-.->" : "-->"} ${to}`);
   }
 
   for (const node of graph.nodes) {

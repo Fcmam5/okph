@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isReservedFile } from "./discover.js";
 import type { ParsedLink } from "./parse.js";
 
 /** Input to the graph builder: a parsed doc plus its root-relative path. */
@@ -18,39 +19,27 @@ export interface GraphNode {
   readonly label: string;
 }
 
-/**
- * How a link should be read.
- *
- * - `"cite"`: `from` relies on `to`'s content — the edge impact analysis cares
- *   about.
- * - `"nav"`: `from` merely enumerates `to`. An OKF index file (spec §8) is a
- *   directory listing for progressive disclosure, and may be generated
- *   automatically, so listing a document asserts no reliance on it.
- */
-export type EdgeKind = "cite" | "nav";
-
 /** A directed edge: `from` links to `to` (both are node paths). */
 export interface GraphEdge {
   readonly from: string;
   readonly to: string;
-  readonly kind: EdgeKind;
 }
 
 /** Options for the dependent-side traversals. */
 export interface TraversalOptions {
   /**
-   * Walk `"nav"` edges too, so index files count as dependents of everything
-   * they list. Defaults to `false`.
+   * Follow links out of reserved files (`index.md`, `log.md`; spec §3.1)
+   * too, so they count as dependents of everything they mention.
+   * Defaults to `false`: listing or logging a document is not relying on it.
    */
   readonly includeNav?: boolean;
 }
 
-/** Matches an OKF index file in any directory, including the bundle root. */
-const INDEX_DOC_RE = /(^|\/)index\.md$/i;
-
 /** Edges eligible for a dependent-side walk. */
 function reverseEdges(graph: Graph, options: TraversalOptions): readonly GraphEdge[] {
-  return options.includeNav ? graph.edges : graph.edges.filter((e) => e.kind === "cite");
+  return options.includeNav
+    ? graph.edges
+    : graph.edges.filter((e) => !isReservedFile(e.from));
 }
 
 /** A resolved document graph. */
@@ -63,8 +52,7 @@ export interface Graph {
  * Build a directed graph from parsed documents.
  *
  * - One node per input document (sorted by path for deterministic output).
- * - One edge per internal link whose target is a known document, tagged
- *   `"nav"` when it leaves an index file and `"cite"` otherwise.
+ * - One edge per internal link whose target is a known document.
  * - Links to non-existent targets are dropped (broken links are not edges).
  * - Duplicate edges are collapsed.
  *
@@ -93,11 +81,7 @@ export function buildGraph(docs: readonly GraphInput[]): Graph {
       const key = `${doc.path}\u0000${link.target}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      edges.push({
-        from: doc.path,
-        to: link.target,
-        kind: INDEX_DOC_RE.test(doc.path) ? "nav" : "cite",
-      });
+      edges.push({ from: doc.path, to: link.target });
     }
   }
   edges.sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to));
@@ -118,8 +102,9 @@ export function getDependencies(graph: Graph, file: string): string[] {
 
 /**
  * Direct dependents: the paths that cite `file`, sorted.
- * Index files are omitted unless `options.includeNav` is set, since listing a
- * document is not relying on it. Unknown files yield an empty list.
+ * Reserved files (`index.md`, `log.md`) are omitted unless
+ * `options.includeNav` is set, since listing or logging a document is not
+ * relying on it. Unknown files yield an empty list.
  */
 export function getDependents(
   graph: Graph,
@@ -180,8 +165,8 @@ export function subgraph(
 
 /**
  * Potentially affected documents: the seeds plus every document that
- * transitively cites them (reverse traversal). Navigation edges out of index
- * files are not followed unless `options.includeNav` is set, so a directory
+ * transitively cites them (reverse traversal). Links out of reserved files
+ * are not followed unless `options.includeNav` is set, so a directory
  * listing does not make itself affected by everything it lists. Cycle-safe
  * via a visited set. Unknown seeds are ignored; an all-unknown seed list
  * yields [].

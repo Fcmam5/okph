@@ -1,7 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { marked } from "marked";
-import { discover } from "./discover.js";
+import { discover, isReservedFile } from "./discover.js";
 import { MAX_DOC_BYTES } from "./limits.js";
 import { parseDoc, splitFrontmatter } from "./parse.js";
 import { terminalSafe } from "./security.js";
@@ -32,8 +32,6 @@ export interface ValidateResult {
 /** OKF versions this build knows how to check. Newest first. */
 const SUPPORTED_VERSIONS = ["0.2"] as const;
 
-/** Reserved filenames (spec §3.1): index listings and update logs. */
-const RESERVED_RE = /(^|\/)(index|log)\.md$/i;
 const INDEX_RE = /(^|\/)index\.md$/i;
 const LOG_RE = /(^|\/)log\.md$/i;
 
@@ -83,7 +81,7 @@ export async function validate(root: string): Promise<ValidateResult> {
 
     const content = await readFile(abs, "utf8");
     const { frontmatter, body, malformed } = splitFrontmatter(content);
-    const reserved = RESERVED_RE.test(rel);
+    const reserved = isReservedFile(rel);
 
     checkFrontmatter(frontmatter, malformed, rel, reserved, diagnostics);
     if (LOG_RE.test(rel)) checkLog(body, rel, diagnostics);
@@ -168,7 +166,7 @@ export async function validate(root: string): Promise<ValidateResult> {
     });
   }
   for (const rel of files) {
-    if (!RESERVED_RE.test(rel) && !incoming.has(rel)) {
+    if (!isReservedFile(rel) && !incoming.has(rel)) {
       diagnostics.push({
         level: "warning",
         kind: "orphan",

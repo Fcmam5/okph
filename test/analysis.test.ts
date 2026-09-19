@@ -44,9 +44,9 @@ describe("neighborhood", () => {
       "settlement.md",
     ]);
     expect(sub.edges).toEqual([
-      { from: "payments.md", to: "settlement.md", kind: "cite" },
-      { from: "settlement.md", to: "ledger.md", kind: "cite" },
-      { from: "settlement.md", to: "reconciliation.md", kind: "cite" },
+      { from: "payments.md", to: "settlement.md" },
+      { from: "settlement.md", to: "ledger.md" },
+      { from: "settlement.md", to: "reconciliation.md" },
     ]);
   });
 });
@@ -61,8 +61,8 @@ describe("subgraph", () => {
       "settlement.md",
     ]);
     expect(sub.edges).toEqual([
-      { from: "settlement.md", to: "ledger.md", kind: "cite" },
-      { from: "settlement.md", to: "reconciliation.md", kind: "cite" },
+      { from: "settlement.md", to: "ledger.md" },
+      { from: "settlement.md", to: "reconciliation.md" },
     ]);
   });
 
@@ -70,7 +70,7 @@ describe("subgraph", () => {
     const g = buildGraph(docs);
     const sub = subgraph(g, "settlement.md", "dependents");
     expect(sub.nodes.map((n) => n.path)).toEqual(["payments.md", "settlement.md"]);
-    expect(sub.edges).toEqual([{ from: "payments.md", to: "settlement.md", kind: "cite" }]);
+    expect(sub.edges).toEqual([{ from: "payments.md", to: "settlement.md" }]);
   });
 
   it("returns an empty graph for unknown files", () => {
@@ -175,6 +175,23 @@ describe("navigation edges", () => {
       "settlement.md",
     ]);
   });
+
+  it("treats log.md mentions the same way as index listings", () => {
+    const g = buildGraph([
+      ...docs,
+      { path: "log.md", title: "Log", links: [{ text: "l", href: "ledger.md", kind: "internal" as const, target: "ledger.md" }] },
+    ]);
+    expect(getDependents(g, "ledger.md")).toEqual(["settlement.md"]);
+    expect(getAffected(g, ["ledger.md"])).toEqual([
+      "ledger.md",
+      "payments.md",
+      "settlement.md",
+    ]);
+    expect(getDependents(g, "ledger.md", { includeNav: true })).toEqual([
+      "log.md",
+      "settlement.md",
+    ]);
+  });
 });
 
 describe("inducedSubgraph", () => {
@@ -187,8 +204,8 @@ describe("inducedSubgraph", () => {
       "settlement.md",
     ]);
     expect(sub.edges).toEqual([
-      { from: "payments.md", to: "settlement.md", kind: "cite" },
-      { from: "settlement.md", to: "ledger.md", kind: "cite" },
+      { from: "payments.md", to: "settlement.md" },
+      { from: "settlement.md", to: "ledger.md" },
     ]);
   });
 });
