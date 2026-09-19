@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `okph validate [path]` and `validate(root)` — check a bundle against the OKF spec. Errors are conformance MUSTs (§11): missing/unparseable frontmatter, missing `type`, `index.md`/`log.md` misuse. Warnings cover SHOULDs and tolerated issues: broken links, frontmatter paths to missing files (`resource`, `computation`, `executor`, `attester`, `sources`), relative links, escaping links, orphans, malformed `status`/`tags`/`generated`/`verified`, missing `description`, missing root `index.md`. `--strict` fails on warnings too. Reads `okf_version` from the root index and warns on unsupported versions (best-effort, spec §12).
+
 ## [0.3.0] - 2026-09-18
 
 ### Added

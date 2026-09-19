@@ -48,22 +48,32 @@ export function parseDoc(content: string, docRelPath: string): ParsedDoc {
   return { title, links };
 }
 
-function splitFrontmatter(content: string): {
+/**
+ * Split a document into its frontmatter mapping and markdown body.
+ *
+ * `malformed` distinguishes "a `---` block exists but is not a parseable
+ * mapping" from "no frontmatter" — validators need the difference. Pure and
+ * total: never throws.
+ */
+export function splitFrontmatter(content: string): {
   frontmatter: Record<string, unknown>;
   body: string;
+  malformed: boolean;
 } {
   const match = FRONTMATTER_RE.exec(content);
-  if (!match) return { frontmatter: {}, body: content };
+  if (!match) return { frontmatter: {}, body: content, malformed: false };
   const body = content.slice(match[0].length);
   try {
     const parsed = YAML.parse(match[1]!);
-    if (parsed && typeof parsed === "object") {
-      return { frontmatter: parsed as Record<string, unknown>, body };
+    // Frontmatter is always a key/value mapping (§2, §4.1) — a YAML list or
+    // scalar block is malformed, not a frontmatter object.
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return { frontmatter: parsed as Record<string, unknown>, body, malformed: false };
     }
   } catch {
-    // Malformed frontmatter is treated as absent; parsing must not throw.
+    // Malformed frontmatter is reported via `malformed`, never thrown.
   }
-  return { frontmatter: {}, body };
+  return { frontmatter: {}, body, malformed: true };
 }
 
 /** Select the frontmatter title, first plain-text H1, or filename stem. */

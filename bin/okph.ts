@@ -17,6 +17,7 @@ import {
   subgraph,
   terminalSafe,
   toPosix,
+  validate,
   type Graph,
 } from "../src/index.js";
 
@@ -46,6 +47,7 @@ Usage:
   okph dependents <file> [--root <dir>] [--graph]
   okph affected <file> [--root <dir>] [--graph]
   okph affected --git <base> [--root <dir>] [--graph]
+  okph validate [path] [--strict]
 
 Options:
   --base-url <url>  Emit absolute click links joined onto <url>.
@@ -62,6 +64,7 @@ Options:
   --git <base>      Seed affected from markdown files changed or deleted
                     since <base> (commits, working tree, and untracked files).
                     <base> may be any revision or range, e.g. HEAD~1, main..HEAD.
+  --strict          validate: exit non-zero on warnings too (CI gate).
   -h, --help        Show this help.
 `;
 
@@ -81,6 +84,7 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
       graph: { type: "boolean" },
       "include-nav": { type: "boolean" },
       root: { type: "string" },
+      strict: { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },
   });
@@ -92,7 +96,7 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
 
   const [command, target] = positionals;
 
-  if (command !== "graph" && !DOC_COMMANDS.has(command ?? "")) {
+  if (command !== "graph" && command !== "validate" && !DOC_COMMANDS.has(command ?? "")) {
     process.stderr.write(
       `Unknown or missing command: ${command === undefined ? "(none)" : terminalSafe(command)}\n\n${USAGE}`
     );
@@ -207,6 +211,29 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
     return 0;
   }
 
+  if (command === "validate") {
+    const root = path.resolve(cwd, target ?? ".");
+    const problem = await rootError(root, target ?? ".", "path");
+    if (problem) {
+      process.stderr.write(problem);
+      return 1;
+    }
+    const { diagnostics, version, errorCount, warningCount } = await validate(root);
+    for (const d of diagnostics) {
+      const where = d.target === undefined ? d.path : `${d.path} -> ${d.target}`;
+      process.stdout.write(`${terminalSafe(where)}  [${d.level}] ${d.kind}: ${d.message}\n`);
+    }
+    if (diagnostics.length === 0) {
+      process.stderr.write(`OKF ${version}: no problems found.\n`);
+    } else {
+      process.stderr.write(
+        `OKF ${version}: ${errorCount} error(s), ${warningCount} warning(s).\n`
+      );
+    }
+    if (errorCount > 0) return 1;
+    return values.strict === true && warningCount > 0 ? 1 : 0;
+  }
+
   if (!target) {
     process.stderr.write(`Missing <path>.\n\n${USAGE}`);
     return 1;
@@ -221,19 +248,23 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
 }
 
 /**
- * Check a user-supplied `--root`, returning an error line or `null`.
+ * Check a user-supplied directory, returning an error line or `null`.
  * A missing path and an unreadable one are reported differently, so a
  * permissions or I/O failure is not mistaken for a typo.
  */
-async function rootError(resolved: string, asTyped: string): Promise<string | null> {
+async function rootError(
+  resolved: string,
+  asTyped: string,
+  label: string = "--root"
+): Promise<string | null> {
   const shown = terminalSafe(asTyped);
   try {
     if ((await stat(resolved)).isDirectory()) return null;
-    return `Error: --root is not a directory: ${shown}\n`;
+    return `Error: ${label} is not a directory: ${shown}\n`;
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
-    if (code === "ENOENT") return `Error: --root does not exist: ${shown}\n`;
-    return `Error: cannot read --root ${shown}: ${code ?? "unknown error"}\n`;
+    if (code === "ENOENT") return `Error: ${label} does not exist: ${shown}\n`;
+    return `Error: cannot read ${label} ${shown}: ${code ?? "unknown error"}\n`;
   }
 }
 
