@@ -24,6 +24,7 @@ okph affected docs/ledger.md --graph
 okph affected --git HEAD~1         # changed markdown since HEAD~1 + their dependents
 okph affected --git main --graph
 okph affected --git main --root docs  # only look at docs/, ignore the rest of the repo
+okph affected --git main --root docs --md  # same, as a markdown link list
 okph validate ./docs                  # check the bundle against the OKF spec
 okph validate ./docs --strict         # also fail on warnings (CI gate)
 ```

@@ -10,10 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `GraphEdge.kind` and the `EdgeKind` type are gone — breaking. Whether a link is a dependency is now decided from the filename at traversal time, via `isReservedFile()`. Same rule, one more file: `log.md` mentions no longer count as dependencies either. `--include-nav` covers both.
-- `validate` now warns on more §5/§6.2 issues: bad `status` values, `tags` that aren't a string list, `generated` without `by`, malformed `verified` entries, and frontmatter paths (`resource`, `computation`, `executor`, `attester`, `sources`) pointing at files that don't exist.
 
 ### Added
 
+- `--md` on `deps`/`dependents`/`affected` — print results as a markdown link list (`- [Title](path)`) instead of plain paths; honors `--base-url` for absolute links.
 - `okph validate [path]` and `validate(root)` — check a bundle against the OKF spec. Errors are conformance MUSTs (§11): missing/unparseable frontmatter, missing `type`, `index.md`/`log.md` misuse. Warnings cover SHOULDs and tolerated issues: broken links, frontmatter paths to missing files (`resource`, `computation`, `executor`, `attester`, `sources`), relative links, escaping links, orphans, malformed `status`/`tags`/`generated`/`verified`, missing `description`, missing root `index.md`. `--strict` fails on warnings too. Reads `okf_version` from the root index and warns on unsupported versions (best-effort, spec §12).
 
 ## [0.3.0] - 2026-09-18
