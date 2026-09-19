@@ -24,7 +24,11 @@ okph affected docs/ledger.md --graph
 okph affected --git HEAD~1         # changed markdown since HEAD~1 + their dependents
 okph affected --git main --graph
 okph affected --git main --root docs  # only look at docs/, ignore the rest of the repo
+okph validate ./docs                  # check the bundle against the OKF spec
+okph validate ./docs --strict         # also fail on warnings (CI gate)
 ```
+
+`validate` checks a bundle against the OKF spec and prints findings as `path -> target [level] kind: message`, sorted by path. Errors are spec MUSTs (missing or unparseable frontmatter, missing `type`, `index.md`/`log.md` misuse); warnings are spec SHOULDs and tolerated problems (broken links, missing files named by `resource`/`computation`/`executor`/`attester`, relative links, orphans, malformed `status`/`tags`/`generated`/`verified`, missing `description`). Exits `1` on any error — warnings pass unless `--strict` is set.
 
 `deps`/`dependents`/`affected` scan the knowledge base from the current working directory and print sorted paths, one per line — no Mermaid. Paths are relative to your cwd, so run from the repo root for repo-relative output. `affected` means *potentially* affected: reachable through links, not necessarily impacted. Links are read as citations — `a → b` means "a relies on b's content", so `affected b.md` reports `b.md` plus everything that cites it, transitively. `affected --git <base>` seeds from markdown files changed or deleted since `<base>` (commits, working tree, and untracked files), then reports those files plus their transitive dependents — useful for "what might need review after this branch" checks.
 

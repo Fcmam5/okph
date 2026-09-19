@@ -1,6 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { discover, toPosix } from "./discover.js";
+import { MAX_DOC_BYTES } from "./limits.js";
 import { parseDoc } from "./parse.js";
 import { buildGraph, neighborhood, type Graph, type GraphInput } from "./graph.js";
 import { renderMermaid, type RenderOptions } from "./mermaid.js";
@@ -20,6 +21,8 @@ export {
 export { renderMermaid } from "./mermaid.js";
 export { safeHref, escapeLabel, terminalSafe } from "./security.js";
 export { changedMarkdownFiles } from "./git.js";
+export { validate } from "./validate.js";
+export type { Diagnostic, DiagnosticLevel, ValidateResult } from "./validate.js";
 export type { ParsedDoc, ParsedLink } from "./parse.js";
 export type {
   EdgeKind,
@@ -41,8 +44,7 @@ export interface LoadGraphOptions {
   readonly extraPaths?: readonly string[];
 }
 
-/** Refuse to read a single markdown file larger than this (DoS guard). */
-export const MAX_DOC_BYTES = 5 * 1024 * 1024;
+export { MAX_DOC_BYTES } from "./limits.js";
 
 /**
  * Read a folder of markdown documents and build the document graph.
