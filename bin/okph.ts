@@ -191,7 +191,7 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
     const display = (rel: string) => toPosix(path.relative(cwd, path.join(root, rel)));
 
     if (command === "affected" && values.git !== undefined) {
-      const { changed, deleted } = await changedMarkdownFiles(values.git, root);
+      const { added, modified, deleted } = await changedMarkdownFiles(values.git, root);
       // Deleted docs are kept as stub nodes (unless excluded) so edges
       // pointing at them survive and their dependents show up as affected.
       const graph = await loadGraph(root, { extraPaths: deleted, exclude });
@@ -201,7 +201,7 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
         );
       }
       const known = new Set(graph.nodes.map((n) => n.path));
-      const seeds = [...changed, ...deleted].filter((s) => known.has(s));
+      const seeds = [...added, ...modified, ...deleted].filter((s) => known.has(s));
       if (seeds.length === 0) {
         process.stderr.write(
           `No markdown files changed since ${terminalSafe(values.git)} (or all were excluded).\n`
@@ -212,7 +212,7 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
         graph,
         getAffected(graph, seeds, walkOpts),
         values.graph === true,
-        { ...renderOpts, highlight: seeds },
+        { ...renderOpts, highlight: modified, added, deleted },
         display,
         values.md === true
       );

@@ -8,8 +8,10 @@ const execFileAsync = promisify(execFile);
 
 /** Markdown files changed relative to a git base revision. */
 export interface ChangedFiles {
-  /** Added or modified `.md` files, sorted, POSIX-style, relative to `cwd`. */
-  readonly changed: string[];
+  /** Added `.md` files (committed additions and untracked), sorted, POSIX-style, relative to `cwd`. */
+  readonly added: string[];
+  /** Modified or renamed `.md` files, sorted, POSIX-style, relative to `cwd`. */
+  readonly modified: string[];
   /** Deleted `.md` files, sorted, POSIX-style, relative to `cwd`. */
   readonly deleted: string[];
 }
@@ -34,7 +36,8 @@ export async function changedMarkdownFiles(base: string, cwd: string): Promise<C
   }
   const scanRoot = await realpath(cwd);
   let repoRoot: string;
-  let diff: string;
+  let addedDiff: string;
+  let modified: string;
   let deleted: string;
   let untracked: string;
   try {
@@ -44,8 +47,11 @@ export async function changedMarkdownFiles(base: string, cwd: string): Promise<C
       { cwd: scanRoot }
     );
     repoRoot = await realpath(top.replace(/\r?\n$/, ""));
-    const [d, del, u] = await Promise.all([
-      execFileAsync("git", ["diff", "--name-only", "-z", "--diff-filter=d", base, "--"], {
+    const [a, m, del, u] = await Promise.all([
+      execFileAsync("git", ["diff", "--name-only", "-z", "--diff-filter=A", base, "--"], {
+        cwd: repoRoot,
+      }),
+      execFileAsync("git", ["diff", "--name-only", "-z", "--diff-filter=MRT", base, "--"], {
         cwd: repoRoot,
       }),
       execFileAsync("git", ["diff", "--name-only", "-z", "--diff-filter=D", base, "--"], {
@@ -55,14 +61,16 @@ export async function changedMarkdownFiles(base: string, cwd: string): Promise<C
         cwd: repoRoot,
       }),
     ]);
-    diff = d.stdout;
+    addedDiff = a.stdout;
+    modified = m.stdout;
     deleted = del.stdout;
     untracked = u.stdout;
   } catch (err) {
     throw gitError(err);
   }
   return {
-    changed: collect(repoRoot, scanRoot, `${diff}\0${untracked}`),
+    added: collect(repoRoot, scanRoot, `${addedDiff}\0${untracked}`),
+    modified: collect(repoRoot, scanRoot, modified),
     deleted: collect(repoRoot, scanRoot, deleted),
   };
 }

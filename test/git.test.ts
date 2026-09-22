@@ -37,9 +37,10 @@ beforeAll(async () => {
 afterAll(() => rm(repo, { recursive: true, force: true }));
 
 describe("changedMarkdownFiles", () => {
-  it("returns changed/new .md files, repo-relative to cwd, excluding deleted and non-md", async () => {
-    const { changed, deleted } = await changedMarkdownFiles("base", repo);
-    expect(changed).toEqual(["docs/a.md", "docs/naïve.md", "docs/new.md"]);
+  it("returns added/modified/deleted .md files, repo-relative to cwd, excluding non-md", async () => {
+    const { added, modified, deleted } = await changedMarkdownFiles("base", repo);
+    expect(added).toEqual(["docs/naïve.md", "docs/new.md"]);
+    expect(modified).toEqual(["docs/a.md"]);
     expect(deleted).toEqual(["docs/deleted.md"]);
   });
 });

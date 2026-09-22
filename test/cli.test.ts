@@ -178,9 +178,9 @@ describe("run", () => {
 
   it("affected --git --graph highlights changed seeds", async () => {
     const { stdout } = await capture(["affected", "--git", "base", "--graph"], repo);
-    // b.md was deleted since base — it renders as a stub node and must be
-    // the highlighted one; its dependents stay unstyled.
-    expect(stdout).toMatch(/style n_\w+ fill:/);
+    // b.md was deleted since base — it renders as a stub node with the
+    // deleted (red) fill; its dependents stay unstyled.
+    expect(stdout).toMatch(/style n_\w+ fill:#ef9a9a/);
     expect(stdout.match(/style n_/g)).toHaveLength(1);
   });
 
