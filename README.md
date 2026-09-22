@@ -56,7 +56,7 @@ Files outside `<dir>` are not scanned and never appear in the output. You still 
 
 `--include-nav` turns that off. You shouldn't need it: spec §3.1 says reserved files can't be concept documents, so real content in one means the bundle is wrong.
 
-In `--graph` output the queried document is drawn with a filled highlight so it stands out among its dependencies. For `affected --git`, every changed file is highlighted by status: green = added, amber = modified, red = deleted.
+In `--graph` output the queried document is drawn with a filled highlight so it stands out among the other nodes. For `affected --git`, every changed file included in the rendered graph is highlighted by status: green = added, amber = modified, red = deleted.
 
 `graph` output is Mermaid graph syntax printed to stdout. Pipe it to a file or Mermaid renderer.
 

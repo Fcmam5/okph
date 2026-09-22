@@ -8,9 +8,9 @@ const execFileAsync = promisify(execFile);
 
 /** Markdown files changed relative to a git base revision. */
 export interface ChangedFiles {
-  /** Added `.md` files (committed additions, copies, and untracked), sorted, POSIX-style, relative to `cwd`. */
+  /** Added `.md` files (committed additions and untracked), sorted, POSIX-style, relative to `cwd`. */
   readonly added: string[];
-  /** Modified, renamed, type-changed, or unmerged `.md` files, sorted, POSIX-style, relative to `cwd`. */
+  /** Modified `.md` files, sorted, POSIX-style, relative to `cwd`. */
   readonly modified: string[];
   /** Deleted `.md` files, sorted, POSIX-style, relative to `cwd`. */
   readonly deleted: string[];
@@ -47,16 +47,27 @@ export async function changedMarkdownFiles(base: string, cwd: string): Promise<C
       { cwd: scanRoot }
     );
     repoRoot = await realpath(top.replace(/\r?\n$/, ""));
+    // --no-renames overrides the caller's diff.renames config: without it, a
+    // renamed file can surface as status R, which none of the filters below
+    // match, and the file silently disappears from all three arrays. Forcing
+    // it off makes a rename resolve as delete (old path) + add (new path),
+    // consistent with how deleted-doc stubs already work.
     const [a, m, del, u] = await Promise.all([
-      execFileAsync("git", ["diff", "--name-only", "-z", "--diff-filter=AC", base, "--"], {
-        cwd: repoRoot,
-      }),
-      execFileAsync("git", ["diff", "--name-only", "-z", "--diff-filter=MRTU", base, "--"], {
-        cwd: repoRoot,
-      }),
-      execFileAsync("git", ["diff", "--name-only", "-z", "--diff-filter=D", base, "--"], {
-        cwd: repoRoot,
-      }),
+      execFileAsync(
+        "git",
+        ["diff", "--no-renames", "--name-only", "-z", "--diff-filter=A", base, "--"],
+        { cwd: repoRoot }
+      ),
+      execFileAsync(
+        "git",
+        ["diff", "--no-renames", "--name-only", "-z", "--diff-filter=M", base, "--"],
+        { cwd: repoRoot }
+      ),
+      execFileAsync(
+        "git",
+        ["diff", "--no-renames", "--name-only", "-z", "--diff-filter=D", base, "--"],
+        { cwd: repoRoot }
+      ),
       execFileAsync("git", ["ls-files", "--others", "--exclude-standard", "-z"], {
         cwd: repoRoot,
       }),
