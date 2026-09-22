@@ -143,6 +143,39 @@ describe("run", () => {
     expect(stderr).toContain("--md is only supported by");
   });
 
+  it("--exclude drops matching files from the graph", async () => {
+    const { stdout } = await capture(
+      ["dependents", "docs/topic.md", "--exclude", "README.md"],
+      repo
+    );
+    expect(stdout.split("\n").filter(Boolean)).toEqual(["docs/guide.md"]);
+  });
+
+  it("--exclude supports ** globs", async () => {
+    const { stdout } = await capture(
+      ["dependents", "docs/topic.md", "--exclude", "**/guide.md"],
+      repo
+    );
+    expect(stdout.split("\n").filter(Boolean)).toEqual(["README.md"]);
+  });
+
+  it("--exclude drops a deleted file's stub and exits clean when nothing remains", async () => {
+    const { code, stdout, stderr } = await capture(
+      ["affected", "--git", "base", "--exclude", "b.md"],
+      repo
+    );
+    expect(code).toBe(0);
+    expect(stdout).not.toContain("b.md");
+    expect(stdout).not.toContain("Potentially affected");
+    expect(stderr).toContain("or all were excluded");
+  });
+
+  it("rejects --exclude on non-doc commands", async () => {
+    const { code, stderr } = await capture(["validate", ".", "--exclude", "*.md"], repo);
+    expect(code).toBe(1);
+    expect(stderr).toContain("--exclude is only supported by");
+  });
+
   it("rejects --root on the graph command", async () => {
     const { code, stderr } = await capture(["graph", ".", "--root", "docs"], repo);
     expect(code).toBe(1);

@@ -41,6 +41,12 @@ export interface LoadGraphOptions {
    * kept, so impact analysis can still find their dependents.
    */
   readonly extraPaths?: readonly string[];
+  /**
+   * Glob patterns matched against root-relative paths; matches are excluded
+   * from the graph entirely — no node, no edges, not a seed. E.g.
+   * `index.md` or `docs/{index,log}.md`.
+   */
+  readonly exclude?: readonly string[];
 }
 
 export { MAX_DOC_BYTES } from "./limits.js";
@@ -52,7 +58,10 @@ export { MAX_DOC_BYTES } from "./limits.js";
  * @throws If a discovered file exceeds {@link MAX_DOC_BYTES}.
  */
 export async function loadGraph(root: string, options: LoadGraphOptions = {}): Promise<Graph> {
-  const files = await discover(root);
+  const exclude = options.exclude ?? [];
+  const files = (await discover(root)).filter(
+    (rel) => !exclude.some((glob) => path.matchesGlob(rel, glob))
+  );
   const docs: GraphInput[] = await Promise.all(
     files.map(async (rel) => {
       const abs = path.join(root, rel);
@@ -69,7 +78,7 @@ export async function loadGraph(root: string, options: LoadGraphOptions = {}): P
   );
   const seen = new Set(files);
   for (const p of options.extraPaths ?? []) {
-    if (!seen.has(p)) {
+    if (!seen.has(p) && !exclude.some((glob) => path.matchesGlob(p, glob))) {
       docs.push({ path: p, title: path.posix.basename(p, ".md"), links: [] });
     }
   }
