@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-13
+
 ### Added
 
 - `--exclude <glob>` on `deps`/`dependents`/`affected` — drop matching files from the graph entirely (no node, no edges, not a seed). Repeatable; matched against root-relative paths. E.g. `--exclude '**/{index,log}.md'` keeps reserved files out of `affected` results even when they changed.
