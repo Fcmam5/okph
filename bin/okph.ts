@@ -67,10 +67,10 @@ const USAGE = `okph - generate a Mermaid graph of a markdown knowledge base
 
 Usage:
   okph graph <path> [--base-url <url>] [--allow-large]
-  okph deps <file> [--root <dir>] [--graph] [--md]
-  okph dependents <file> [--root <dir>] [--graph] [--md]
-  okph affected <file> [--root <dir>] [--graph] [--md]
-  okph affected --git <base> [--root <dir>] [--graph] [--md]
+  okph deps <file> [--root <dir>] [--graph] [--md] [--exclude <glob>...]
+  okph dependents <file> [--root <dir>] [--graph] [--md] [--exclude <glob>...]
+  okph affected <file> [--root <dir>] [--graph] [--md] [--exclude <glob>...]
+  okph affected --git <base> [--root <dir>] [--graph] [--md] [--exclude <glob>...]
   okph validate [path] [--strict]
 
 Options:
@@ -83,6 +83,9 @@ Options:
                     to where you are, and results are printed that way too.
   --graph           Render deps/dependents/affected as a Mermaid subgraph instead of a list.
   --md              Print deps/dependents/affected as a markdown link list (\`- [Title](path)\`).
+  --exclude <glob>  Drop matching files from the graph (repeatable, matched
+                    against root-relative, /-separated paths).
+                    E.g. '**/{index,log}.md'.
   --include-nav     Count index.md/log.md links as dependencies in dependents
                     and affected. Off by default (OKF §3.1); deps always
                     lists every link.
@@ -109,6 +112,7 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
       graph: { type: "boolean" },
       "include-nav": { type: "boolean" },
       md: { type: "boolean" },
+      exclude: { type: "string", multiple: true },
       root: { type: "string" },
       strict: { type: "boolean" },
       help: { type: "boolean", short: "h" },
@@ -138,6 +142,19 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
     process.stderr.write(
       `Error: --md is only supported by the deps, dependents, and affected commands.\n\n${USAGE}`
     );
+    return 1;
+  }
+  if (values.exclude !== undefined && !DOC_COMMANDS.has(command ?? "")) {
+    process.stderr.write(
+      `Error: --exclude is only supported by the deps, dependents, and affected commands.\n\n${USAGE}`
+    );
+    return 1;
+  }
+  const exclude = values.exclude ?? [];
+  // Glob compilation can blow up exponentially on pathological patterns
+  // (e.g. long runs of braces); paths can't exceed 255 bytes anyway.
+  if (exclude.some((g) => g.length > 256)) {
+    process.stderr.write(`Error: --exclude glob exceeds 256 characters.\n\n${USAGE}`);
     return 1;
   }
   if (values.root !== undefined && !DOC_COMMANDS.has(command ?? "")) {
@@ -174,17 +191,20 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
 
     if (command === "affected" && values.git !== undefined) {
       const { changed, deleted } = await changedMarkdownFiles(values.git, root);
-      // Deleted docs are kept as stub nodes so edges pointing at them survive
-      // and their dependents show up as affected.
-      const graph = await loadGraph(root, { extraPaths: deleted });
+      // Deleted docs are kept as stub nodes (unless excluded) so edges
+      // pointing at them survive and their dependents show up as affected.
+      const graph = await loadGraph(root, { extraPaths: deleted, exclude });
       if (deleted.length > 0) {
         process.stderr.write(
           `Deleted since ${terminalSafe(values.git)}: ${deleted.map((p) => terminalSafe(display(p))).join(", ")}\n`
         );
       }
-      const seeds = [...changed, ...deleted];
+      const known = new Set(graph.nodes.map((n) => n.path));
+      const seeds = [...changed, ...deleted].filter((s) => known.has(s));
       if (seeds.length === 0) {
-        process.stderr.write(`No markdown files changed since ${terminalSafe(values.git)}.\n`);
+        process.stderr.write(
+          `No markdown files changed since ${terminalSafe(values.git)} (or all were excluded).\n`
+        );
         return 0;
       }
       emitAffected(
@@ -210,7 +230,7 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
       );
       return 1;
     }
-    const graph = await loadGraph(root);
+    const graph = await loadGraph(root, { exclude });
     if (!graph.nodes.some((n) => n.path === rel)) {
       process.stderr.write(`Error: not a known document: ${terminalSafe(display(rel))}\n`);
       return 1;
