@@ -20,6 +20,7 @@ import {
   toPosix,
   validate,
   type Graph,
+  type RenderOptions,
 } from "../src/index.js";
 
 const DOC_COMMANDS = new Set(["deps", "dependents", "affected"]);
@@ -48,7 +49,7 @@ function emitAffected(
   graph: Graph,
   affected: string[],
   useGraph: boolean,
-  renderOpts: { baseUrl?: string },
+  renderOpts: RenderOptions,
   display: (rel: string) => string,
   md: boolean
 ) {
@@ -211,7 +212,7 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
         graph,
         getAffected(graph, seeds, walkOpts),
         values.graph === true,
-        renderOpts,
+        { ...renderOpts, highlight: seeds },
         display,
         values.md === true
       );
@@ -241,7 +242,7 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
         graph,
         getAffected(graph, [rel], walkOpts),
         values.graph === true,
-        renderOpts,
+        { ...renderOpts, highlight: [rel] },
         display,
         values.md === true
       );
@@ -252,7 +253,7 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
       process.stdout.write(
         renderMermaid(
           subgraph(graph, rel, command === "deps" ? "deps" : "dependents", walkOpts),
-          renderOpts
+          { ...renderOpts, highlight: [rel] }
         ) + "\n"
       );
       return 0;

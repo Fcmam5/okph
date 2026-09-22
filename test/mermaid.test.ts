@@ -50,4 +50,10 @@ describe("renderMermaid", () => {
   it("is deterministic", () => {
     expect(renderMermaid(graph)).toBe(renderMermaid(graph));
   });
+
+  it("styles highlighted nodes only", () => {
+    const out = renderMermaid(graph, { highlight: ["b.md", "gone.md"] });
+    expect(out).toContain(`style ${idOf("b.md")} fill:`);
+    expect(out).not.toContain(`style ${idOf("a.md")}`);
+  });
 });

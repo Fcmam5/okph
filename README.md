@@ -56,6 +56,8 @@ Files outside `<dir>` are not scanned and never appear in the output. You still 
 
 `--include-nav` turns that off. You shouldn't need it: spec §3.1 says reserved files can't be concept documents, so real content in one means the bundle is wrong.
 
+In `--graph` output the queried document — or, for `affected --git`, every file that changed since `<base>` — is drawn with a filled highlight so it stands out among its dependencies.
+
 `graph` output is Mermaid graph syntax printed to stdout. Pipe it to a file or Mermaid renderer.
 
 Note on scan scope: `graph <path>` recursively reads every `.md` file under `<path>` — including paths outside your cwd (e.g. `okph graph /some/dir`). `deps`/`dependents`/`affected` scan from the current working directory, or from `--root <dir>` when given.

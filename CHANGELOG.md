@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.5.0] - 2026-10-13
+## [0.6.0] - 2026-09-22
+
+### Added
+
+- `--graph` output on `deps`/`dependents`/`affected` now highlights the queried document (or, for `affected --git`, every changed/deleted seed) with a filled style, so it stands out among its dependencies. Also exposed as `RenderOptions.highlight` for library users.
+
+## [0.5.0] - 2026-09-22
 
 ### Added
 
