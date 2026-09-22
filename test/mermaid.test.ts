@@ -56,4 +56,10 @@ describe("renderMermaid", () => {
     expect(out).toContain(`style ${idOf("b.md")} fill:`);
     expect(out).not.toContain(`style ${idOf("a.md")}`);
   });
+
+  it("styles added/deleted with their own fills, last category wins", () => {
+    const out = renderMermaid(graph, { added: ["a.md"], deleted: ["a.md", "b.md"] });
+    expect(out).toContain(`style ${idOf("a.md")} fill:#ef9a9a`);
+    expect(out).toContain(`style ${idOf("b.md")} fill:#ef9a9a`);
+  });
 });
