@@ -2,6 +2,12 @@ import type { Graph } from "./graph.js";
 import { isReservedFile } from "./discover.js";
 import { escapeLabel, safeHref } from "./security.js";
 
+const STYLES: Record<"highlight" | "added" | "deleted", string> = {
+  highlight: "fill:#ffb300,stroke:#e65100,color:#000",
+  added: "fill:#a5d6a7,stroke:#2e7d32,color:#000",
+  deleted: "fill:#ef9a9a,stroke:#c62828,color:#000",
+};
+
 /** Options controlling Mermaid rendering. */
 export interface RenderOptions {
   /**
@@ -14,10 +20,21 @@ export interface RenderOptions {
    */
   readonly allowLarge?: boolean;
   /**
-   * Paths to emphasize with a filled style — e.g. the queried document or
-   * git-changed seeds — so they stand out among their dependencies.
+   * Paths to emphasize with a filled style — the queried document, or
+   * modified seeds — so they stand out among their dependencies.
    */
   readonly highlight?: readonly string[];
+  /**
+   * Paths added since the compared revision — drawn with a green fill.
+   */
+  readonly added?: readonly string[];
+  /**
+   * Paths deleted since the compared revision — drawn with a red fill.
+   *
+   * If a path appears in more than one of `highlight`/`added`/`deleted`,
+   * the last-listed category wins (deleted > added > highlight).
+   */
+  readonly deleted?: readonly string[];
 }
 
 /**
@@ -49,13 +66,17 @@ export function renderMermaid(graph: Graph, options: RenderOptions = {}): string
     if (href !== null) lines.push(`  click ${node.id} "${href}"`);
   }
 
-  // Iterate graph.nodes (not options.highlight) so style lines stay in
-  // deterministic node order regardless of caller-supplied path order.
-  const highlighted = new Set(options.highlight ?? []);
+  // Explicit color:#000 keeps text readable on the fills in both light and
+  // dark Mermaid themes. Later categories win on overlap (deleted > added >
+  // highlight). Iterate graph.nodes (not the option arrays) so style lines
+  // stay in deterministic node order and can't be duplicated.
+  const styles = new Map<string, string>();
+  for (const kind of ["highlight", "added", "deleted"] as const) {
+    for (const p of options[kind] ?? []) styles.set(p, STYLES[kind]);
+  }
   for (const node of graph.nodes) {
-    if (highlighted.has(node.path)) {
-      lines.push(`  style ${node.id} fill:#ffb300,stroke:#e65100`);
-    }
+    const style = styles.get(node.path);
+    if (style) lines.push(`  style ${node.id} ${style}`);
   }
 
   return lines.join("\n");

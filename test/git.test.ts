@@ -37,9 +37,34 @@ beforeAll(async () => {
 afterAll(() => rm(repo, { recursive: true, force: true }));
 
 describe("changedMarkdownFiles", () => {
-  it("returns changed/new .md files, repo-relative to cwd, excluding deleted and non-md", async () => {
-    const { changed, deleted } = await changedMarkdownFiles("base", repo);
-    expect(changed).toEqual(["docs/a.md", "docs/naïve.md", "docs/new.md"]);
+  it("returns added/modified/deleted .md files, repo-relative to cwd, excluding non-md", async () => {
+    const { added, modified, deleted } = await changedMarkdownFiles("base", repo);
+    expect(added).toEqual(["docs/naïve.md", "docs/new.md"]);
+    expect(modified).toEqual(["docs/a.md"]);
     expect(deleted).toEqual(["docs/deleted.md"]);
+  });
+
+  it("resolves a rename as delete + add even when diff.renames is on", async () => {
+    const orig = await mkdtemp(path.join(tmpdir(), "okph-git-rn-"));
+    try {
+      const rn = (...args: string[]) => execFileSync("git", args, { cwd: orig });
+      rn("init", "-q");
+      rn("config", "user.email", "t@t.t");
+      rn("config", "user.name", "t");
+      rn("config", "diff.renames", "true");
+      await writeFile(path.join(orig, "old.md"), "# Old\n");
+      rn("add", ".");
+      rn("commit", "-qm", "base");
+      rn("tag", "base");
+      await rename(path.join(orig, "old.md"), path.join(orig, "new.md"));
+      rn("add", "-A");
+
+      const { added, modified, deleted } = await changedMarkdownFiles("base", orig);
+      expect(added).toEqual(["new.md"]);
+      expect(modified).toEqual([]);
+      expect(deleted).toEqual(["old.md"]);
+    } finally {
+      await rm(orig, { recursive: true, force: true });
+    }
   });
 });

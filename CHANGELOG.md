@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-22
+
+### Added
+
+- `affected --git --graph` highlights changed seeds by status — green for added, amber for modified, red for deleted — instead of one color for all. Exposed as `RenderOptions.added`/`deleted` (with `highlight` kept for modified/queried) for library users.
+
+### Changed
+
+- **Breaking (library):** `changedMarkdownFiles` now returns `{ added, modified, deleted }` instead of `{ changed, deleted }` — `added` covers committed additions and untracked files, `modified` covers content changes. Renames are resolved with `--no-renames`, so they surface as delete (old path) + add (new path) regardless of the caller's `diff.renames` git config.
+
 ## [0.6.0] - 2026-09-22
 
 ### Added
