@@ -13,6 +13,11 @@ export interface RenderOptions {
    * Bypass the 500 node/edge safety limit.
    */
   readonly allowLarge?: boolean;
+  /**
+   * Paths to emphasize with a filled style — e.g. the queried document or
+   * git-changed seeds — so they stand out among their dependencies.
+   */
+  readonly highlight?: readonly string[];
 }
 
 /**
@@ -42,6 +47,15 @@ export function renderMermaid(graph: Graph, options: RenderOptions = {}): string
   for (const node of graph.nodes) {
     const href = safeHref(node.path, options.baseUrl);
     if (href !== null) lines.push(`  click ${node.id} "${href}"`);
+  }
+
+  // Iterate graph.nodes (not options.highlight) so style lines stay in
+  // deterministic node order regardless of caller-supplied path order.
+  const highlighted = new Set(options.highlight ?? []);
+  for (const node of graph.nodes) {
+    if (highlighted.has(node.path)) {
+      lines.push(`  style ${node.id} fill:#ffb300,stroke:#e65100`);
+    }
   }
 
   return lines.join("\n");

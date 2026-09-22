@@ -176,6 +176,20 @@ describe("run", () => {
     expect(stderr).toContain("--exclude is only supported by");
   });
 
+  it("affected --git --graph highlights changed seeds", async () => {
+    const { stdout } = await capture(["affected", "--git", "base", "--graph"], repo);
+    // b.md was deleted since base — it renders as a stub node and must be
+    // the highlighted one; its dependents stay unstyled.
+    expect(stdout).toMatch(/style n_\w+ fill:/);
+    expect(stdout.match(/style n_/g)).toHaveLength(1);
+  });
+
+  it("deps --graph highlights the queried document", async () => {
+    const { stdout } = await capture(["deps", "docs/topic.md", "--graph"], repo);
+    expect(stdout).toContain("graph TD");
+    expect(stdout).toMatch(/style n_\w+ fill:/);
+  });
+
   it("rejects --root on the graph command", async () => {
     const { code, stderr } = await capture(["graph", ".", "--root", "docs"], repo);
     expect(code).toBe(1);
