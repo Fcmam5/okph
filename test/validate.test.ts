@@ -2,7 +2,8 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { validate } from "../src/validate.js";
+import { readFile } from "node:fs/promises";
+import { validate, WARNING_KINDS } from "../src/validate.js";
 
 let dir: string;
 
@@ -99,6 +100,37 @@ describe("validate", () => {
       "b.md": "---\ntype: T\n---\n",
     });
     expect(diags).toContain("warning:prefer-absolute-links");
+  });
+
+  it("drops ignored warning kinds and excludes them from the count", async () => {
+    const root = await tree({
+      "index.md": "# I\n* [A](/ign-a.md)",
+      "ign-a.md": "---\ntype: T\n---\n[b](ign-b.md)\n[ghost](ghost.md)\n",
+      "ign-b.md": "---\ntype: T\n---\n",
+    });
+    const all = await validate(root);
+    const result = await validate(root, { ignore: ["prefer-absolute-links"] });
+    const kinds = result.diagnostics.map((d) => d.kind);
+    expect(kinds).not.toContain("prefer-absolute-links");
+    expect(kinds).toContain("missing-doc");
+    const dropped = all.diagnostics.filter((d) => d.kind === "prefer-absolute-links").length;
+    expect(dropped).toBeGreaterThan(0);
+    expect(result.warningCount).toBe(all.warningCount - dropped);
+  });
+
+  it("WARNING_KINDS matches every warning kind validate.ts emits", async () => {
+    const src = await readFile(new URL("../src/validate.ts", import.meta.url), "utf8");
+    const emitted = [...src.matchAll(/level: "warning",\s*kind: "([a-z-]+)"/g)].map((m) => m[1]);
+    expect([...WARNING_KINDS].sort()).toEqual([...new Set(emitted)].sort());
+  });
+
+  it("never ignores errors", async () => {
+    const result = await validate(
+      await tree({ "index.md": "# I\n* [A](/ign-e.md)", "ign-e.md": "# A\n" }),
+      { ignore: ["missing-frontmatter" as never] }
+    );
+    expect(result.diagnostics.map((d) => d.kind)).toContain("missing-frontmatter");
+    expect(result.errorCount).toBeGreaterThan(0);
   });
 
   it("flags unreachable documents but not reserved files", async () => {

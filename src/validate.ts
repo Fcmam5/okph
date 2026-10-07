@@ -29,6 +29,35 @@ export interface ValidateResult {
   readonly warningCount: number;
 }
 
+/** Every warning rule id. Only these can be ignored; errors (spec MUSTs) cannot. */
+export const WARNING_KINDS = [
+  "escapes-bundle",
+  "invalid-generated",
+  "invalid-status",
+  "invalid-tags",
+  "invalid-verified",
+  "log-date-order",
+  "missing-doc",
+  "missing-file",
+  "missing-resource",
+  "missing-source-resource",
+  "okf-version-format",
+  "okf-version-unsupported",
+  "orphan",
+  "prefer-absolute-links",
+  "recommended-description",
+  "recommended-index",
+] as const;
+
+/** A warning rule id that {@link ValidateOptions.ignore} accepts. */
+export type WarningKind = (typeof WARNING_KINDS)[number];
+
+/** Options for {@link validate}. */
+export interface ValidateOptions {
+  /** Warning kinds to suppress. Ignored findings are not counted. */
+  readonly ignore?: readonly WarningKind[];
+}
+
 /** OKF versions this build knows how to check. Newest first. */
 const SUPPORTED_VERSIONS = ["0.2"] as const;
 
@@ -58,7 +87,11 @@ const FILE_EXT_RE = /\.[a-z][a-z0-9]{0,7}$/i;
  * "not-yet-written knowledge"). Diagnostics are sorted by path and
  * deduplicated per (path, kind, target).
  */
-export async function validate(root: string): Promise<ValidateResult> {
+export async function validate(
+  root: string,
+  options: ValidateOptions = {}
+): Promise<ValidateResult> {
+  const ignore = new Set<string>(options.ignore);
   const files = await discover(root);
   const known = new Set(files);
   const diagnostics: Diagnostic[] = [];
@@ -176,7 +209,8 @@ export async function validate(root: string): Promise<ValidateResult> {
     }
   }
 
-  const deduped = dedupe(diagnostics).sort(
+  const kept = diagnostics.filter((d) => d.level === "error" || !ignore.has(d.kind));
+  const deduped = dedupe(kept).sort(
     (a, b) =>
       a.path.localeCompare(b.path) ||
       a.kind.localeCompare(b.kind) ||

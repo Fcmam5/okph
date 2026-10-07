@@ -19,8 +19,10 @@ import {
   terminalSafe,
   toPosix,
   validate,
+  WARNING_KINDS,
   type Graph,
   type RenderOptions,
+  type WarningKind,
 } from "../src/index.js";
 
 const DOC_COMMANDS = new Set(["deps", "dependents", "affected"]);
@@ -72,7 +74,7 @@ Usage:
   okph dependents <file> [--root <dir>] [--graph] [--md] [--exclude <glob>...]
   okph affected <file> [--root <dir>] [--graph] [--md] [--exclude <glob>...]
   okph affected --git <base> [--root <dir>] [--graph] [--md] [--exclude <glob>...]
-  okph validate [path] [--strict]
+  okph validate [path] [--strict] [--ignore <kind>...]
 
 Options:
   --base-url <url>  Emit absolute links joined onto <url> (graph clicks and
@@ -94,6 +96,10 @@ Options:
                     since <base> (commits, working tree, and untracked files).
                     <base> may be any revision or range, e.g. HEAD~1, main..HEAD.
   --strict          validate: exit non-zero on warnings too (CI gate).
+  --ignore <kind>   validate: suppress a warning kind (repeatable). Ignored
+                    findings are not printed or counted. Errors can't be ignored.
+                    E.g. --ignore prefer-absolute-links.
+                    Kinds: ${WARNING_KINDS.join(", ")}.
   -h, --help        Show this help.
 `;
 
@@ -114,6 +120,7 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
       "include-nav": { type: "boolean" },
       md: { type: "boolean" },
       exclude: { type: "string", multiple: true },
+      ignore: { type: "string", multiple: true },
       root: { type: "string" },
       strict: { type: "boolean" },
       help: { type: "boolean", short: "h" },
@@ -156,6 +163,19 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
   // (e.g. long runs of braces); paths can't exceed 255 bytes anyway.
   if (exclude.some((g) => g.length > 256)) {
     process.stderr.write(`Error: --exclude glob exceeds 256 characters.\n\n${USAGE}`);
+    return 1;
+  }
+  const ignore = values.ignore ?? [];
+  if (ignore.length > 0 && command !== "validate") {
+    process.stderr.write(`Error: --ignore is only supported by the validate command.\n\n${USAGE}`);
+    return 1;
+  }
+  const badKind = ignore.find((k) => !(WARNING_KINDS as readonly string[]).includes(k));
+  if (badKind !== undefined) {
+    const shown = badKind.length > 64 ? `${badKind.slice(0, 64)}…` : badKind;
+    process.stderr.write(
+      `Error: --ignore: '${terminalSafe(shown)}' is not an ignorable warning kind (errors can't be ignored). Use one of: ${WARNING_KINDS.join(", ")}.\n`
+    );
     return 1;
   }
   if (values.root !== undefined && !DOC_COMMANDS.has(command ?? "")) {
@@ -276,7 +296,9 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
       process.stderr.write(problem);
       return 1;
     }
-    const { diagnostics, version, errorCount, warningCount } = await validate(root);
+    const { diagnostics, version, errorCount, warningCount } = await validate(root, {
+      ignore: ignore as WarningKind[],
+    });
     for (const d of diagnostics) {
       const where = d.target === undefined ? d.path : `${d.path} -> ${d.target}`;
       process.stdout.write(`${terminalSafe(where)}  [${d.level}] ${d.kind}: ${d.message}\n`);
