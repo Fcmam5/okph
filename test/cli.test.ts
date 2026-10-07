@@ -176,6 +176,71 @@ describe("run", () => {
     expect(stderr).toContain("--exclude is only supported by");
   });
 
+  it("validate --ignore drops the named warning kind", async () => {
+    const before = await capture(["validate", "."], repo);
+    expect(before.stdout).toContain("[warning] orphan");
+    const after = await capture(["validate", ".", "--ignore", "orphan"], repo);
+    expect(after.stdout).not.toContain("[warning] orphan");
+    expect(after.stdout).toContain("[warning] missing-doc");
+  });
+
+  it("validate --ignore is repeatable", async () => {
+    const { stdout } = await capture(
+      ["validate", ".", "--ignore", "orphan", "--ignore", "missing-doc"],
+      repo
+    );
+    expect(stdout).not.toContain("[warning] orphan");
+    expect(stdout).not.toContain("[warning] missing-doc");
+  });
+
+  it("validate --ignore rejects unknown and error kinds, listing valid ones", async () => {
+    for (const kind of ["no-such-rule", "missing-type"]) {
+      const { code, stdout, stderr } = await capture(["validate", ".", "--ignore", kind], repo);
+      expect(code).toBe(1);
+      expect(stdout).toBe("");
+      expect(stderr).toContain(`--ignore: '${kind}' is not an ignorable warning`);
+      expect(stderr).toContain("prefer-absolute-links");
+    }
+  });
+
+  it("validate --ignore does not echo control characters", async () => {
+    const { stderr } = await capture(["validate", ".", "--ignore", "x\u001b[31my"], repo);
+    expect(stderr).not.toContain("\u001b");
+  });
+
+  it("validate --ignore truncates a long bad kind in the error", async () => {
+    const { stderr } = await capture(["validate", ".", "--ignore", "a".repeat(5000)], repo);
+    expect(stderr).toContain(`'${"a".repeat(64)}…'`);
+    expect(stderr.length).toBeLessThan(1000);
+  });
+
+  it("validate --strict passes when every warning is ignored", async () => {
+    // Outside `repo`: untracked files there would become `affected --git` seeds.
+    const bundle = await mkdtemp(path.join(tmpdir(), "okph-warn-only-"));
+    try {
+      await writeFile(path.join(bundle, "index.md"), "# I\n\n* [A](/a.md)\n");
+      await writeFile(path.join(bundle, "a.md"), "---\ntype: T\ndescription: d\n---\n[b](b.md)\n");
+      await writeFile(path.join(bundle, "b.md"), "---\ntype: T\ndescription: d\n---\n# B\n");
+      const strict = await capture(["validate", ".", "--strict"], bundle);
+      expect(strict.code).toBe(1);
+      expect(strict.stdout).toContain("[warning] prefer-absolute-links");
+      expect(strict.stdout).not.toContain("[error]");
+      const argv = ["validate", ".", "--strict", "--ignore", "prefer-absolute-links"];
+      const { code, stdout, stderr } = await capture(argv, bundle);
+      expect(code).toBe(0);
+      expect(stdout).toBe("");
+      expect(stderr).toContain("no problems found");
+    } finally {
+      await rm(bundle, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects --ignore on non-validate commands", async () => {
+    const { code, stderr } = await capture(["deps", "docs/guide.md", "--ignore", "orphan"], repo);
+    expect(code).toBe(1);
+    expect(stderr).toContain("--ignore is only supported by the validate command");
+  });
+
   it("affected --git --graph highlights changed seeds", async () => {
     const { stdout } = await capture(["affected", "--git", "base", "--graph"], repo);
     // b.md was deleted since base — it renders as a stub node with the

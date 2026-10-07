@@ -21,8 +21,14 @@ export {
 export { renderMermaid } from "./mermaid.js";
 export { safeHref, escapeLabel, terminalSafe } from "./security.js";
 export { changedMarkdownFiles } from "./git.js";
-export { validate } from "./validate.js";
-export type { Diagnostic, DiagnosticLevel, ValidateResult } from "./validate.js";
+export { validate, WARNING_KINDS } from "./validate.js";
+export type {
+  Diagnostic,
+  DiagnosticLevel,
+  ValidateOptions,
+  ValidateResult,
+  WarningKind,
+} from "./validate.js";
 export type { ParsedDoc, ParsedLink } from "./parse.js";
 export type {
   Graph,

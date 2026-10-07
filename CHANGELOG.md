@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-08
+
+### Added
+
+- `--ignore <kind>` on `validate` — suppress a warning kind (repeatable), e.g. `--ignore prefer-absolute-links` for bundles that keep relative links so they stay clickable in IDEs. Ignored findings are not printed or counted, so `--strict` skips them. Only warning kinds are accepted; unknown kinds and errors are rejected. Library: `validate(root, { ignore })`, plus exported `WARNING_KINDS`, `WarningKind`, and `ValidateOptions`.
+
 ## [0.7.0] - 2026-09-22
 
 ### Added
