@@ -27,7 +27,23 @@ export interface ValidateResult {
   readonly version: string;
   readonly errorCount: number;
   readonly warningCount: number;
+  /** Documents scanned. */
+  readonly docCount: number;
+  /** Scanned documents inside {@link ValidateOptions.scope}; absent when unscoped. */
+  readonly scopedCount?: number;
 }
+
+/**
+ * Warning kinds that describe the whole bundle, not one document: they stay
+ * visible when validation is scoped. `orphan` depends on links from every
+ * other document, so a changed link can orphan a document that never changed.
+ */
+const BUNDLE_WIDE_WARNINGS: ReadonlySet<string> = new Set([
+  "okf-version-format",
+  "okf-version-unsupported",
+  "orphan",
+  "recommended-index",
+]);
 
 /** Every warning rule id. Only these can be ignored; errors (spec MUSTs) cannot. */
 export const WARNING_KINDS = [
@@ -56,6 +72,12 @@ export type WarningKind = (typeof WARNING_KINDS)[number];
 export interface ValidateOptions {
   /** Warning kinds to suppress. Ignored findings are not counted. */
   readonly ignore?: readonly WarningKind[];
+  /**
+   * Root-relative document paths to report warnings for. The whole bundle is
+   * still scanned and every error is kept; only warnings on other documents
+   * are dropped, except bundle-wide kinds (orphans, index, version).
+   */
+  readonly scope?: readonly string[];
 }
 
 /** OKF versions this build knows how to check. Newest first. */
@@ -209,7 +231,13 @@ export async function validate(
     }
   }
 
-  const kept = diagnostics.filter((d) => d.level === "error" || !ignore.has(d.kind));
+  const scope = options.scope && new Set(options.scope);
+  const kept = diagnostics.filter(
+    (d) =>
+      d.level === "error" ||
+      (!ignore.has(d.kind) &&
+        (!scope || scope.has(d.path) || BUNDLE_WIDE_WARNINGS.has(d.kind)))
+  );
   const deduped = dedupe(kept).sort(
     (a, b) =>
       a.path.localeCompare(b.path) ||
@@ -222,6 +250,8 @@ export async function validate(
     version,
     errorCount,
     warningCount: deduped.length - errorCount,
+    docCount: files.length,
+    ...(scope && { scopedCount: files.filter((f) => scope.has(f)).length }),
   };
 }
 

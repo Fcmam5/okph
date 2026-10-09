@@ -51,6 +51,15 @@ When using `okph` in your application:
 
 ### Known limitations
 
+- `--git` (on `affected` and `validate`) runs your local `git` against the
+  scanned repository. Git reads that repository's config, and some settings
+  (e.g. `core.fsmonitor`) can execute commands. Do not use `--git` on a
+  checkout you do not trust. `okph` passes arguments as an argv array (no
+  shell) and rejects a `<base>` starting with `-`.
+- `validate --git` hides warnings outside the changed set. Errors are never
+  scoped, but keep a full `validate` run on your main branch as the
+  authoritative check.
+
 - Very deeply nested markdown (e.g. thousands of nested blockquotes or list
   levels, well under the per-file size limit) overflows the stack in the
   `marked` lexer. `okph` reports the error and exits non-zero; it does not

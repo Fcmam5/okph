@@ -53,6 +53,7 @@ This tool is used in security-sensitive environments. Everything it reads is hos
 ## Conventions
 
 - **Spec-first.** `okf/v02-SPEC.md` decides what is an error vs a warning: `validate` errors are spec MUSTs (§11); warnings are SHOULDs and tolerated issues. Do not invent requirements, and do not reject bundles for things §11 says consumers must tolerate (broken links, missing `index.md`, unknown keys).
+- **Scoped validation never hides errors.** `validate --git` scans the whole bundle and reports every error; only warnings are scoped. `orphan`, `recommended-index` and `okf-version-*` stay bundle-wide, and `index.md`/`log.md` links count toward scope. If scoping fails, validate everything.
 - **Reserved files aren't dependencies.** Links out of `index.md`/`log.md` are excluded from dependents/affected via `isReservedFile` — filename-based, no edge type field.
 
 ## Boundaries

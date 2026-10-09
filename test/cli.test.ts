@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { run } from "../bin/okph.js";
+import { MAX_DOC_BYTES } from "../src/limits.js";
 
 let repo: string;
 const git = (...args: string[]) => execFileSync("git", args, { cwd: repo });
@@ -259,5 +260,177 @@ describe("run", () => {
     const { code, stderr } = await capture(["graph", ".", "--root", "docs"], repo);
     expect(code).toBe(1);
     expect(stderr).toContain("--root is only supported by");
+  });
+});
+
+describe("validate --git", () => {
+  let bundle: string;
+  const bgit = (...args: string[]) => execFileSync("git", args, { cwd: bundle });
+  const fm = (extra = "") => `---\ntype: T\ndescription: d\n${extra}---\n`;
+  const put = (name: string, content: string) => writeFile(path.join(bundle, name), content);
+
+  beforeAll(async () => {
+    bundle = await mkdtemp(path.join(tmpdir(), "okph-vgit-"));
+    bgit("init", "-q");
+    bgit("config", "user.email", "t@t.t");
+    bgit("config", "user.name", "t");
+    await put("index.md", "# I\n\n* [A](/a.md)\n* [B](/b.md)\n* [C](/c.md)\n* [E](/e.md)\n");
+    await put("a.md", `${fm()}# A\n`);
+    await put("b.md", `${fm()}[a](/a.md)\n`);
+    await put("c.md", "---\ntype: T\n---\n# C\n");
+    await put("e.md", "---\ndescription: d\n---\n# E\n");
+    bgit("add", ".");
+    bgit("commit", "-qm", "base");
+    bgit("tag", "base");
+  });
+
+  afterAll(() => rm(bundle, { recursive: true, force: true }));
+
+  const reset = () => bgit("reset", "-q", "--hard", "base");
+
+  it("scopes warnings to changed docs, keeps errors bundle-wide, and says so", async () => {
+    await put("a.md", `${fm()}[x](/nope.md)\n`);
+    try {
+      const { code, stdout, stderr } = await capture(["validate", ".", "--git", "base"], bundle);
+      expect(code).toBe(1);
+      expect(stdout).toContain("a.md -> nope.md  [warning] missing-doc");
+      expect(stdout).not.toContain("c.md  [warning] recommended-description");
+      expect(stdout).toContain("e.md  [error] missing-type");
+      expect(stderr).toContain("Scoped to");
+      expect(stderr).toContain("warnings only; errors cover the whole bundle");
+    } finally {
+      reset();
+    }
+  });
+
+  it("surfaces warnings in dependents of a deleted doc", async () => {
+    await rm(path.join(bundle, "a.md"));
+    try {
+      const { stdout } = await capture(["validate", ".", "--git", "base"], bundle);
+      expect(stdout).toContain("b.md -> a.md  [warning] missing-doc");
+    } finally {
+      reset();
+    }
+  });
+
+  it("surfaces broken links in index.md when a linked doc is deleted", async () => {
+    await rm(path.join(bundle, "a.md"));
+    try {
+      const { stdout } = await capture(["validate", ".", "--git", "base"], bundle);
+      expect(stdout).toContain("index.md -> a.md  [warning] missing-doc");
+    } finally {
+      reset();
+    }
+  });
+
+  it("reports an oversized file as an error instead of crashing", async () => {
+    const big = path.join(bundle, "big.md");
+    await writeFile(big, "x".repeat(MAX_DOC_BYTES + 1));
+    try {
+      const { code, stdout, stderr } = await capture(["validate", ".", "--git", "base"], bundle);
+      expect(code).toBe(1);
+      expect(stdout).toContain("big.md  [error] file-too-large");
+      expect(stderr).toContain("validating the whole bundle");
+    } finally {
+      await rm(big, { force: true });
+    }
+  });
+
+  it("keeps orphan warnings bundle-wide", async () => {
+    await put("index.md", "# I\n\n* [A](/a.md)\n* [B](/b.md)\n* [E](/e.md)\n");
+    try {
+      const { stdout } = await capture(["validate", ".", "--git", "base"], bundle);
+      expect(stdout).toContain("c.md  [warning] orphan");
+    } finally {
+      reset();
+    }
+  });
+
+  it("still reports an error with nothing changed", async () => {
+    const { code, stdout, stderr } = await capture(["validate", ".", "--git", "base"], bundle);
+    expect(code).toBe(1);
+    expect(stdout).toContain("e.md  [error] missing-type");
+    expect(stderr).toContain("Scoped to 0 of");
+  });
+
+  it("fails closed on an unknown base", async () => {
+    await expect(capture(["validate", ".", "--git", "no-such-rev"], bundle)).rejects.toThrow(
+      /git:/
+    );
+  });
+
+  it("rejects a base that looks like a flag", async () => {
+    await expect(capture(["validate", ".", "--git=--output=x"], bundle)).rejects.toThrow(
+      /Invalid git base/
+    );
+  });
+
+  it("rejects --git on commands other than affected and validate", async () => {
+    const { code, stderr } = await capture(["deps", "a.md", "--git", "base"], bundle);
+    expect(code).toBe(1);
+    expect(stderr).toContain("--git is only supported by the affected and validate commands");
+  });
+
+  it("--strict fails on a scoped warning but not on an out-of-scope one", async () => {
+    // e.md has a bundle-wide error at base, so fix it for this test to keep
+    // the exit code driven by warnings only.
+    await put("e.md", "---\ntype: T\ndescription: d\n---\n# E\n");
+    const { code } = await capture(["validate", ".", "--git", "base", "--strict"], bundle);
+    expect(code).toBe(0); // c.md's description warning is out of scope.
+    try {
+      await put("a.md", `${fm()}[x](/nope.md)\n`);
+      const changed = await capture(["validate", ".", "--git", "base", "--strict"], bundle);
+      expect(changed.code).toBe(1);
+      expect(changed.stdout).toContain("a.md -> nope.md  [warning] missing-doc");
+    } finally {
+      reset();
+    }
+  });
+
+  it("scopes by paths relative to a subdirectory bundle root", async () => {
+    const sub = await mkdtemp(path.join(tmpdir(), "okph-vgit-sub-"));
+    try {
+      const sgit = (...a: string[]) => execFileSync("git", a, { cwd: sub });
+      sgit("init", "-q");
+      sgit("config", "user.email", "t@t.t");
+      sgit("config", "user.name", "t");
+      await mkdir(path.join(sub, "docs"));
+      const sput = (n: string, c: string) => writeFile(path.join(sub, "docs", n), c);
+      await sput("index.md", "# I\n\n* [A](/a.md)\n* [O](/orphan.md)\n");
+      await sput("a.md", `${fm()}# A\n`);
+      await sput("c.md", "---\ntype: T\n---\n# C\n");
+      await sput("orphan.md", `${fm()}# O\n`);
+      await writeFile(path.join(sub, "README.md"), "# R\n\n[no](/nothing.md)\n");
+      sgit("add", ".");
+      sgit("commit", "-qm", "base");
+      sgit("tag", "base");
+      // README's new broken link is outside the bundle; index.md's change is in.
+      await sput("index.md", "# I\n\n* [A](/a.md)\n");
+      const { code, stdout, stderr } = await capture(
+        ["validate", "docs", "--git", "base"],
+        sub
+      );
+      expect(code).toBe(0);
+      expect(stdout).not.toContain("nothing.md");
+      expect(stdout).not.toContain("recommended-description");
+      expect(stdout).toContain("orphan.md  [warning] orphan");
+      expect(stderr).toContain("Scoped to 1 of 4 docs");
+      // An untracked doc inside the bundle joins the scope.
+      await sput("new.md", `${fm()}[gone](/x/gone.md)\n`);
+      const again = await capture(["validate", "docs", "--git", "base"], sub);
+      expect(again.stdout).toContain("new.md -> x/gone.md  [warning] missing-doc");
+    } finally {
+      await rm(sub, { recursive: true, force: true });
+    }
+  });
+
+  it("fails closed outside a git repository", async () => {
+    const bare = await mkdtemp(path.join(tmpdir(), "okph-vgit-bare-"));
+    try {
+      await writeFile(path.join(bare, "a.md"), `${fm()}# A\n`);
+      await expect(capture(["validate", ".", "--git", "HEAD"], bare)).rejects.toThrow(/git:/);
+    } finally {
+      await rm(bare, { recursive: true, force: true });
+    }
   });
 });

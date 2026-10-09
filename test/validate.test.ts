@@ -277,3 +277,54 @@ describe("validate", () => {
     ).toHaveLength(1);
   });
 });
+
+describe("validate scope", () => {
+  let scopeDir: string;
+
+  beforeAll(async () => {
+    scopeDir = await mkdtemp(path.join(tmpdir(), "okph-scope-"));
+    await mkdir(path.join(scopeDir), { recursive: true });
+    await writeFile(
+      path.join(scopeDir, "index.md"),
+      "# I\n\n* [A](/a.md)\n* [C](/c.md)\n"
+    );
+    await writeFile(
+      path.join(scopeDir, "a.md"),
+      "---\ntype: T\ndescription: d\n---\n[g](/gone.md)\n"
+    );
+    await writeFile(path.join(scopeDir, "b.md"), "---\ntype: T\ndescription: d\n---\n# B\n");
+    await writeFile(path.join(scopeDir, "c.md"), "---\ndescription: d\n---\n# C\n");
+  });
+
+  afterAll(() => rm(scopeDir, { recursive: true, force: true }));
+
+  it("filters warnings to scoped docs and keeps every error", async () => {
+    const r = await validate(scopeDir, { scope: ["a.md"] });
+    const visible = r.diagnostics.map((d) => `${d.level}:${d.kind}:${d.path}`);
+    expect(visible).toContain("warning:missing-doc:a.md");
+    expect(visible).toContain("error:missing-type:c.md");
+    expect(visible).not.toContain("warning:recommended-description:c.md");
+    // orphans are bundle-wide: b.md has no incoming links.
+    expect(visible).toContain("warning:orphan:b.md");
+    expect(r.docCount).toBe(4);
+    expect(r.scopedCount).toBe(1);
+  });
+
+  it("leaves scopedCount absent without scope, and composes with ignore", async () => {
+    const unscoped = await validate(scopeDir);
+    expect(unscoped.scopedCount).toBeUndefined();
+    const r = await validate(scopeDir, {
+      scope: ["a.md"],
+      ignore: ["orphan", "missing-doc"],
+    });
+    expect(r.diagnostics.map((d) => d.kind)).toEqual(["missing-type"]);
+    expect(r.warningCount).toBe(0);
+  });
+
+  it("an empty scope still reports errors and bundle-wide warnings", async () => {
+    const r = await validate(scopeDir, { scope: [] });
+    expect(r.errorCount).toBe(1);
+    expect(r.diagnostics.every((d) => d.level === "error" || d.kind === "orphan")).toBe(true);
+    expect(r.scopedCount).toBe(0);
+  });
+});

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `validate --git <base>` — opt-in scoping for PR checks. The whole bundle is still scanned and every error is reported; warnings are limited to documents changed or deleted since `<base>` and their dependents (`orphan`, `recommended-index` and `okf-version-*` are always kept). Links from `index.md`/`log.md` count when computing dependents. Prints a `Scoped to N of M docs` line on stderr, fails on git errors, and falls back to validating the whole bundle if scoping fails (e.g. an oversized file). Library: `validate(root, { scope })`, and `ValidateResult` gains `docCount` and `scopedCount`.
+
+### Changed
+
+- The error for `--git` on unsupported commands now reads "only supported by the affected and validate commands".
+
 ## [0.8.0] - 2026-10-08
 
 ### Added
