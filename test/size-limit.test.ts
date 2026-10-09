@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { generateMermaid, loadGraph, MAX_DOC_BYTES } from "../src/index.js";
+import { mapLimit } from "../src/limits.js";
 
 let tmpDir: string;
 
@@ -41,5 +42,31 @@ describe("size limit", () => {
   it("renders anyway with allowLarge", async () => {
     const out = await generateMermaid(tmpDir, { allowLarge: true });
     expect(out).toContain("graph TD");
+  });
+});
+
+describe("mapLimit", () => {
+  it("keeps at most `limit` calls in flight and preserves order", async () => {
+    let inFlight = 0;
+    let peak = 0;
+    const items = Array.from({ length: 50 }, (_, i) => i);
+    const out = await mapLimit(items, 4, async (n) => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      await new Promise((resolve) => setImmediate(resolve));
+      inFlight--;
+      return n * 2;
+    });
+    expect(peak).toBeLessThanOrEqual(4);
+    expect(out).toEqual(items.map((n) => n * 2));
+  });
+
+  it("rejects when a call rejects", async () => {
+    await expect(
+      mapLimit([1, 2, 3], 2, async (n) => {
+        if (n === 2) throw new Error("boom");
+        return n;
+      })
+    ).rejects.toThrow("boom");
   });
 });

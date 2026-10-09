@@ -64,16 +64,34 @@ export function splitFrontmatter(content: string): {
   if (!match) return { frontmatter: {}, body: content, malformed: false };
   const body = content.slice(match[0].length);
   try {
-    const parsed = YAML.parse(match[1]!);
+    // logLevel "silent": yaml otherwise prints warnings, with the raw source
+    // line, to stderr via process.emitWarning — an unsanitized output path.
+    // Silent also stops `parse` from throwing, so errors are checked here.
+    const doc = YAML.parseDocument(match[1]!, { logLevel: "silent" });
+    const parsed = doc.errors.length === 0 ? doc.toJS() : undefined;
     // Frontmatter is always a key/value mapping (§2, §4.1) — a YAML list or
     // scalar block is malformed, not a frontmatter object.
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return { frontmatter: parsed as Record<string, unknown>, body, malformed: false };
+      return { frontmatter: prototypeless(parsed) as Record<string, unknown>, body, malformed: false };
     }
   } catch {
     // Malformed frontmatter is reported via `malformed`, never thrown.
   }
   return { frontmatter: {}, body, malformed: true };
+}
+
+/**
+ * Deep-copy plain objects onto a null prototype, so reading an absent key
+ * (`frontmatter.type`) can never reach a polluted `Object.prototype`.
+ */
+function prototypeless(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(prototypeless);
+  if (value && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
+    const out: Record<string, unknown> = Object.create(null);
+    for (const [k, v] of Object.entries(value)) out[k] = prototypeless(v);
+    return out;
+  }
+  return value;
 }
 
 /** Select the frontmatter title, first plain-text H1, or filename stem. */

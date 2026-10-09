@@ -6,6 +6,14 @@ import { toPosix } from "./discover.js";
 
 const execFileAsync = promisify(execFile);
 
+/**
+ * Run git with repository-configured command hooks disabled. Git reads the
+ * scanned repo's own config, and `core.fsmonitor` names a command it runs on
+ * `diff`/`ls-files`; that must never be a way to execute code through okph.
+ */
+const runGit = (args: string[], cwd: string) =>
+  execFileAsync("git", ["-c", "core.fsmonitor=false", ...args], { cwd });
+
 /** Markdown files changed relative to a git base revision. */
 export interface ChangedFiles {
   /** Added `.md` files (committed additions and untracked), sorted, POSIX-style, relative to `cwd`. */
@@ -41,11 +49,7 @@ export async function changedMarkdownFiles(base: string, cwd: string): Promise<C
   let deleted: string;
   let untracked: string;
   try {
-    const { stdout: top } = await execFileAsync(
-      "git",
-      ["rev-parse", "--show-toplevel"],
-      { cwd: scanRoot }
-    );
+    const { stdout: top } = await runGit(["rev-parse", "--show-toplevel"], scanRoot);
     repoRoot = await realpath(top.replace(/\r?\n$/, ""));
     // --no-renames overrides the caller's diff.renames config: without it, a
     // renamed file can surface as status R, which none of the filters below
@@ -53,24 +57,19 @@ export async function changedMarkdownFiles(base: string, cwd: string): Promise<C
     // it off makes a rename resolve as delete (old path) + add (new path),
     // consistent with how deleted-doc stubs already work.
     const [a, m, del, u] = await Promise.all([
-      execFileAsync(
-        "git",
-        ["diff", "--no-renames", "--name-only", "-z", "--diff-filter=A", base, "--"],
-        { cwd: repoRoot }
+      runGit(
+        ["diff", "--no-renames", "--no-ext-diff", "--name-only", "-z", "--diff-filter=A", base, "--"],
+        repoRoot
       ),
-      execFileAsync(
-        "git",
-        ["diff", "--no-renames", "--name-only", "-z", "--diff-filter=M", base, "--"],
-        { cwd: repoRoot }
+      runGit(
+        ["diff", "--no-renames", "--no-ext-diff", "--name-only", "-z", "--diff-filter=M", base, "--"],
+        repoRoot
       ),
-      execFileAsync(
-        "git",
-        ["diff", "--no-renames", "--name-only", "-z", "--diff-filter=D", base, "--"],
-        { cwd: repoRoot }
+      runGit(
+        ["diff", "--no-renames", "--no-ext-diff", "--name-only", "-z", "--diff-filter=D", base, "--"],
+        repoRoot
       ),
-      execFileAsync("git", ["ls-files", "--others", "--exclude-standard", "-z"], {
-        cwd: repoRoot,
-      }),
+      runGit(["ls-files", "--others", "--exclude-standard", "-z"], repoRoot),
     ]);
     addedDiff = a.stdout;
     modified = m.stdout;

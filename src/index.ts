@@ -1,11 +1,11 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { discover, toPosix } from "./discover.js";
-import { MAX_DOC_BYTES } from "./limits.js";
+import { MAX_CONCURRENT_READS, MAX_DOC_BYTES, mapLimit } from "./limits.js";
 import { parseDoc } from "./parse.js";
 import { buildGraph, neighborhood, type Graph, type GraphInput } from "./graph.js";
 import { renderMermaid, type RenderOptions } from "./mermaid.js";
-import { terminalSafe } from "./security.js";
+import { own, terminalSafe } from "./security.js";
 
 export { discover, toPosix, resolveDocPath, isReservedFile } from "./discover.js";
 export { parseDoc } from "./parse.js";
@@ -64,26 +64,24 @@ export { MAX_DOC_BYTES } from "./limits.js";
  * @throws If a discovered file exceeds {@link MAX_DOC_BYTES}.
  */
 export async function loadGraph(root: string, options: LoadGraphOptions = {}): Promise<Graph> {
-  const exclude = options.exclude ?? [];
+  const exclude = own(options, "exclude") ?? [];
   const files = (await discover(root)).filter(
     (rel) => !exclude.some((glob) => path.matchesGlob(rel, glob))
   );
-  const docs: GraphInput[] = await Promise.all(
-    files.map(async (rel) => {
-      const abs = path.join(root, rel);
-      const info = await stat(abs);
-      if (info.size > MAX_DOC_BYTES) {
-        throw new Error(
-          `File too large: ${terminalSafe(rel)} (${info.size} bytes, limit is ${MAX_DOC_BYTES})`
-        );
-      }
-      const content = await readFile(abs, "utf8");
-      const { title, links } = parseDoc(content, rel);
-      return { path: rel, title, links };
-    })
-  );
+  const docs: GraphInput[] = await mapLimit(files, MAX_CONCURRENT_READS, async (rel) => {
+    const abs = path.join(root, rel);
+    const info = await stat(abs);
+    if (info.size > MAX_DOC_BYTES) {
+      throw new Error(
+        `File too large: ${terminalSafe(rel)} (${info.size} bytes, limit is ${MAX_DOC_BYTES})`
+      );
+    }
+    const content = await readFile(abs, "utf8");
+    const { title, links } = parseDoc(content, rel);
+    return { path: rel, title, links };
+  });
   const seen = new Set(files);
-  for (const p of options.extraPaths ?? []) {
+  for (const p of own(options, "extraPaths") ?? []) {
     if (!seen.has(p) && !exclude.some((glob) => path.matchesGlob(p, glob))) {
       docs.push({ path: p, title: path.posix.basename(p, ".md"), links: [] });
     }
@@ -118,7 +116,7 @@ export async function generateMermaid(
   } else {
     graph = await loadGraph(root);
   }
-  if (!options.allowLarge && (graph.nodes.length > 500 || graph.edges.length > 500)) {
+  if (!own(options, "allowLarge") && (graph.nodes.length > 500 || graph.edges.length > 500)) {
     throw new Error(
       `Graph has ${graph.nodes.length} nodes and ${graph.edges.length} edges, which exceeds the 500 node/edge limit. Some renderers (e.g. GitHub) will not display it. Pass allowLarge: true to render anyway.`
     );

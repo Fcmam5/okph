@@ -53,7 +53,9 @@ When using `okph` in your application:
 
 - `--git` (on `affected` and `validate`) runs your local `git` against the
   scanned repository. Git reads that repository's config, and some settings
-  (e.g. `core.fsmonitor`) can execute commands. Do not use `--git` on a
+  can execute commands. `okph` disables `core.fsmonitor` and external diff
+  drivers, but it cannot enumerate every such setting (for example, clean
+  filters named in the repo's own `.git/config`). Do not use `--git` on a
   checkout you do not trust. `okph` passes arguments as an argv array (no
   shell) and rejects a `<base>` starting with `-`.
 - `validate --git` hides warnings outside the changed set. Errors are never

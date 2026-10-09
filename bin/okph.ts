@@ -36,7 +36,11 @@ function mdLines(
 ): string[] {
   const labelOf = new Map(graph.nodes.map((n) => [n.path, n.label]));
   return paths.map((rel) => {
-    const label = terminalSafe(labelOf.get(rel) ?? rel).replace(/[[\]]/g, "");
+    const label = terminalSafe(labelOf.get(rel) ?? rel)
+      .replace(/[[\]]/g, "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
     const href = safeHref(display(rel), baseUrl);
     if (href === null) return `- ${label}`;
     // Angle-wrapped destinations are the CommonMark escape for parens in
@@ -384,6 +388,14 @@ async function rootError(
   }
 }
 
+/**
+ * The stderr line for an error that escaped `run`. Messages can carry hostile
+ * paths (fs errors) or git's echo of a CLI argument, so they are sanitized.
+ */
+export function errorLine(err: unknown): string {
+  return `Error: ${terminalSafe(err instanceof Error ? err.message : String(err))}\n`;
+}
+
 /** True when this file is the process entrypoint (not an import). */
 function isMain(): boolean {
   const entry = process.argv[1];
@@ -401,7 +413,7 @@ if (isMain()) {
       process.exitCode = code;
     })
     .catch((err: unknown) => {
-      process.stderr.write(`Error: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.stderr.write(errorLine(err));
       process.exitCode = 1;
     });
 }

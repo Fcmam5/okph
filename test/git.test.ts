@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { mkdtemp, writeFile, mkdir, rename, rm } from "node:fs/promises";
+import { mkdtemp, writeFile, mkdir, rename, rm, access } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -65,6 +65,30 @@ describe("changedMarkdownFiles", () => {
       expect(deleted).toEqual(["old.md"]);
     } finally {
       await rm(orig, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("changedMarkdownFiles hostile repo config", () => {
+  it("does not run a command named by the repository's core.fsmonitor", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "okph-fsm-"));
+    const marker = path.join(dir, "..", `okph-fsm-marker-${path.basename(dir)}`);
+    try {
+      const g = (...args: string[]) => execFileSync("git", args, { cwd: dir });
+      g("init", "-q");
+      g("config", "user.email", "t@t.t");
+      g("config", "user.name", "t");
+      await writeFile(path.join(dir, "a.md"), "# A\n");
+      g("add", ".");
+      g("commit", "-qm", "base");
+      await writeFile(path.join(dir, "a.md"), "# A2\n");
+      g("config", "core.fsmonitor", `touch '${marker}' #`);
+      const { modified } = await changedMarkdownFiles("HEAD", dir);
+      expect(modified).toEqual(["a.md"]);
+      await expect(access(marker)).rejects.toThrow();
+    } finally {
+      await rm(marker, { force: true });
+      await rm(dir, { recursive: true, force: true });
     }
   });
 });

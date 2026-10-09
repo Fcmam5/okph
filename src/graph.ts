@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { isReservedFile } from "./discover.js";
 import type { ParsedLink } from "./parse.js";
+import { own } from "./security.js";
 
 /** Input to the graph builder: a parsed doc plus its root-relative path. */
 export interface GraphInput {
@@ -37,7 +38,7 @@ export interface TraversalOptions {
 
 /** Edges eligible for a dependent-side walk. */
 function reverseEdges(graph: Graph, options: TraversalOptions): readonly GraphEdge[] {
-  return options.includeNav
+  return own(options, "includeNav")
     ? graph.edges
     : graph.edges.filter((e) => !isReservedFile(e.from));
 }

@@ -9,6 +9,16 @@ import path from "node:path";
  * and unescaped labels can break out of node syntax.
  */
 
+/**
+ * Read `key` from an options bag only when it is the caller's own property.
+ * An inherited value (a polluted `Object.prototype`) is treated as absent, so
+ * pollution elsewhere in the process can't silently change scan, scope or
+ * rendering behavior.
+ */
+export function own<T extends object, K extends keyof T>(obj: T, key: K): T[K] | undefined {
+  return Object.hasOwn(obj, key) ? obj[key] : undefined;
+}
+
 /** Schemes that are explicitly allowed in absolute links. */
 const ALLOWED_SCHEMES = new Set(["http:", "https:"]);
 

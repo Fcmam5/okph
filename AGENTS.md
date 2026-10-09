@@ -47,6 +47,7 @@ This tool is used in security-sensitive environments. Everything it reads is hos
 
 - **Untrusted input everywhere it prints.** Filenames, file contents, frontmatter values, and CLI args pass through `terminalSafe` before stdout/stderr; link targets through `safeHref`. New output paths must do the same — terminal/CI-log injection is a real risk class here.
 - **Read-only and offline.** Never write into a scanned bundle, never make network calls, never interpolate input into shell commands (`execFile` + argv arrays only).
+- **No prototype-chain reads.** Read option bags through `own()` (`src/security.ts`); frontmatter objects are prototype-less. Never read `options.x` directly.
 - **Bounded resources.** `MAX_DOC_BYTES` caps file size; check size before reading, not after. New code that reads files or follows links must respect the same limits.
 - **Fail closed.** Unreadable paths, oversized files, and unparseable input produce diagnostics or clean exits — never crashes, never silent acceptance.
 

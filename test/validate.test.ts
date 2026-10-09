@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, symlink, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { readFile } from "node:fs/promises";
@@ -326,5 +326,45 @@ describe("validate scope", () => {
     expect(r.errorCount).toBe(1);
     expect(r.diagnostics.every((d) => d.level === "error" || d.kind === "orphan")).toBe(true);
     expect(r.scopedCount).toBe(0);
+  });
+});
+
+describe("validate symlink containment", () => {
+  let outside: string;
+  let bundle: string;
+
+  beforeAll(async () => {
+    outside = await mkdtemp(path.join(tmpdir(), "okph-outside-"));
+    bundle = await mkdtemp(path.join(tmpdir(), "okph-linked-"));
+    await writeFile(path.join(outside, "secret.txt"), "s");
+    await writeFile(path.join(bundle, "real.txt"), "r");
+    await symlink(outside, path.join(bundle, "out"));
+    await symlink(path.join(bundle, "real.txt"), path.join(bundle, "inside.txt"));
+    await writeFile(path.join(bundle, "index.md"), "# I\n\n* [A](/a.md)\n");
+    await writeFile(
+      path.join(bundle, "a.md"),
+      "---\ntype: T\ndescription: d\nresource: out/secret.txt\n---\n" +
+        "[x](/out/secret.txt)\n[y](/out/nope.txt)\n[z](/inside.txt)\n"
+    );
+  });
+
+  afterAll(async () => {
+    await rm(outside, { recursive: true, force: true });
+    await rm(bundle, { recursive: true, force: true });
+  });
+
+  it("does not reveal whether files outside the bundle exist via a symlink", async () => {
+    const { diagnostics } = await validate(bundle);
+    const at = (kind: string, target: string) =>
+      diagnostics.some((d) => d.kind === kind && d.target === target);
+    // Existing and missing outside targets look the same: both count as missing.
+    expect(at("missing-file", "out/secret.txt")).toBe(true);
+    expect(at("missing-file", "out/nope.txt")).toBe(true);
+    expect(at("missing-resource", "out/secret.txt")).toBe(true);
+  });
+
+  it("still accepts a symlink that stays inside the bundle", async () => {
+    const { diagnostics } = await validate(bundle);
+    expect(diagnostics.some((d) => d.target === "inside.txt")).toBe(false);
   });
 });

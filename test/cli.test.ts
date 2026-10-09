@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import { mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { run } from "../bin/okph.js";
+import { run, errorLine } from "../bin/okph.js";
 import { MAX_DOC_BYTES } from "../src/limits.js";
 
 let repo: string;
@@ -431,6 +431,49 @@ describe("validate --git", () => {
       await expect(capture(["validate", ".", "--git", "HEAD"], bare)).rejects.toThrow(/git:/);
     } finally {
       await rm(bare, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("errorLine", () => {
+  it("makes control characters in an error message terminal-safe", () => {
+    const line = errorLine(new Error("EACCES: permission denied, opendir 'x\u001b[31mEVIL'"));
+    expect(line).not.toContain("\u001b");
+    expect(line.startsWith("Error: ")).toBe(true);
+    expect(line.endsWith("\n")).toBe(true);
+  });
+
+  it("covers filesystem errors that carry a hostile directory name", async () => {
+    const bundle = await mkdtemp(path.join(tmpdir(), "okph-hostile-"));
+    const hostile = path.join(bundle, "x\u001b[31mEVIL");
+    try {
+      await mkdir(hostile);
+      await writeFile(path.join(bundle, "a.md"), "# A\n");
+      await chmod(hostile, 0o000);
+      const err = await capture(["validate", "."], bundle).then(
+        () => null,
+        (e: unknown) => e
+      );
+      expect(err).toBeInstanceOf(Error);
+      expect(errorLine(err)).not.toContain("\u001b");
+    } finally {
+      await chmod(hostile, 0o755).catch(() => {});
+      await rm(bundle, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("--md output", () => {
+  it("does not pass raw HTML from a document title into markdown output", async () => {
+    const bundle = await mkdtemp(path.join(tmpdir(), "okph-md-"));
+    try {
+      await writeFile(path.join(bundle, "a.md"), '---\ntitle: "<img src=x onerror=alert(1)> a&b"\n---\n# A\n');
+      await writeFile(path.join(bundle, "b.md"), "# B\n\n[a](a.md)\n");
+      const { stdout } = await capture(["deps", "b.md", "--md"], bundle);
+      expect(stdout).not.toContain("<img");
+      expect(stdout).toContain("&lt;img src=x onerror=alert(1)&gt; a&amp;b");
+    } finally {
+      await rm(bundle, { recursive: true, force: true });
     }
   });
 });
