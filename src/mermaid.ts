@@ -1,6 +1,6 @@
 import type { Graph } from "./graph.js";
 import { isReservedFile } from "./discover.js";
-import { escapeLabel, safeHref } from "./security.js";
+import { escapeLabel, own, safeHref } from "./security.js";
 
 const STYLES: Record<"highlight" | "added" | "deleted", string> = {
   highlight: "fill:#ffb300,stroke:#e65100,color:#000",
@@ -62,7 +62,7 @@ export function renderMermaid(graph: Graph, options: RenderOptions = {}): string
   }
 
   for (const node of graph.nodes) {
-    const href = safeHref(node.path, options.baseUrl);
+    const href = safeHref(node.path, own(options, "baseUrl"));
     if (href !== null) lines.push(`  click ${node.id} "${href}"`);
   }
 
@@ -72,7 +72,7 @@ export function renderMermaid(graph: Graph, options: RenderOptions = {}): string
   // stay in deterministic node order and can't be duplicated.
   const styles = new Map<string, string>();
   for (const kind of ["highlight", "added", "deleted"] as const) {
-    for (const p of options[kind] ?? []) styles.set(p, STYLES[kind]);
+    for (const p of own(options, kind) ?? []) styles.set(p, STYLES[kind]);
   }
   for (const node of graph.nodes) {
     const style = styles.get(node.path);

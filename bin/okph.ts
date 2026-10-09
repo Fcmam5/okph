@@ -36,7 +36,11 @@ function mdLines(
 ): string[] {
   const labelOf = new Map(graph.nodes.map((n) => [n.path, n.label]));
   return paths.map((rel) => {
-    const label = terminalSafe(labelOf.get(rel) ?? rel).replace(/[[\]]/g, "");
+    const label = terminalSafe(labelOf.get(rel) ?? rel)
+      .replace(/[[\]]/g, "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
     const href = safeHref(display(rel), baseUrl);
     if (href === null) return `- ${label}`;
     // Angle-wrapped destinations are the CommonMark escape for parens in
@@ -44,6 +48,24 @@ function mdLines(
     const dest = /[()]/.test(href) ? `<${href}>` : href;
     return `- [${label}](${dest})`;
   });
+}
+
+/**
+ * Graph of `root` plus the changed docs that exist in it as seeds. Deleted
+ * docs are kept as stub nodes (unless excluded) so edges pointing at them
+ * survive and their dependents show up as affected.
+ */
+async function seedGraph(
+  root: string,
+  changed: Awaited<ReturnType<typeof changedMarkdownFiles>>,
+  exclude: string[] = []
+): Promise<{ graph: Graph; seeds: string[] }> {
+  const graph = await loadGraph(root, { extraPaths: changed.deleted, exclude });
+  const known = new Set(graph.nodes.map((n) => n.path));
+  const seeds = [...changed.added, ...changed.modified, ...changed.deleted].filter((s) =>
+    known.has(s)
+  );
+  return { graph, seeds };
 }
 
 /** Print the affected set as a Mermaid subgraph, markdown list, or sorted path list. */
@@ -74,7 +96,7 @@ Usage:
   okph dependents <file> [--root <dir>] [--graph] [--md] [--exclude <glob>...]
   okph affected <file> [--root <dir>] [--graph] [--md] [--exclude <glob>...]
   okph affected --git <base> [--root <dir>] [--graph] [--md] [--exclude <glob>...]
-  okph validate [path] [--strict] [--ignore <kind>...]
+  okph validate [path] [--git <base>] [--strict] [--ignore <kind>...]
 
 Options:
   --base-url <url>  Emit absolute links joined onto <url> (graph clicks and
@@ -95,6 +117,10 @@ Options:
   --git <base>      Seed affected from markdown files changed or deleted
                     since <base> (commits, working tree, and untracked files).
                     <base> may be any revision or range, e.g. HEAD~1, main..HEAD.
+                    With validate: the whole bundle is still scanned and every
+                    error is reported, but warnings are limited to changed
+                    docs and their dependents (orphans, index and version
+                    warnings are always kept). Not a substitute for a full run.
   --strict          validate: exit non-zero on warnings too (CI gate).
   --ignore <kind>   validate: suppress a warning kind (repeatable). Ignored
                     findings are not printed or counted. Errors can't be ignored.
@@ -185,8 +211,10 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
     return 1;
   }
   const gitMode = command === "affected" && values.git !== undefined;
-  if (values.git !== undefined && !gitMode) {
-    process.stderr.write(`Error: --git is only supported by the affected command.\n\n${USAGE}`);
+  if (values.git !== undefined && !gitMode && command !== "validate") {
+    process.stderr.write(
+      `Error: --git is only supported by the affected and validate commands.\n\n${USAGE}`
+    );
     return 1;
   }
   if (gitMode && target) {
@@ -211,17 +239,14 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
     const display = (rel: string) => toPosix(path.relative(cwd, path.join(root, rel)));
 
     if (command === "affected" && values.git !== undefined) {
-      const { added, modified, deleted } = await changedMarkdownFiles(values.git, root);
-      // Deleted docs are kept as stub nodes (unless excluded) so edges
-      // pointing at them survive and their dependents show up as affected.
-      const graph = await loadGraph(root, { extraPaths: deleted, exclude });
+      const changed = await changedMarkdownFiles(values.git, root);
+      const { added, modified, deleted } = changed;
+      const { graph, seeds } = await seedGraph(root, changed, exclude);
       if (deleted.length > 0) {
         process.stderr.write(
           `Deleted since ${terminalSafe(values.git)}: ${deleted.map((p) => terminalSafe(display(p))).join(", ")}\n`
         );
       }
-      const known = new Set(graph.nodes.map((n) => n.path));
-      const seeds = [...added, ...modified, ...deleted].filter((s) => known.has(s));
       if (seeds.length === 0) {
         process.stderr.write(
           `No markdown files changed since ${terminalSafe(values.git)} (or all were excluded).\n`
@@ -296,12 +321,29 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
       process.stderr.write(problem);
       return 1;
     }
-    const { diagnostics, version, errorCount, warningCount } = await validate(root, {
-      ignore: ignore as WarningKind[],
-    });
+    let scope: string[] | undefined;
+    if (values.git !== undefined) {
+      const changed = await changedMarkdownFiles(values.git, root);
+      try {
+        const { graph, seeds } = await seedGraph(root, changed);
+        // includeNav: a broken link in index.md/log.md is still a finding.
+        scope = seeds.length > 0 ? getAffected(graph, seeds, { includeNav: true }) : [];
+      } catch (err) {
+        process.stderr.write(
+          `Could not scope to changed docs (${terminalSafe(err instanceof Error ? err.message : String(err))}); validating the whole bundle.\n`
+        );
+      }
+    }
+    const { diagnostics, version, errorCount, warningCount, docCount, scopedCount } =
+      await validate(root, { ignore: ignore as WarningKind[], ...(scope && { scope }) });
     for (const d of diagnostics) {
       const where = d.target === undefined ? d.path : `${d.path} -> ${d.target}`;
       process.stdout.write(`${terminalSafe(where)}  [${d.level}] ${d.kind}: ${d.message}\n`);
+    }
+    if (scopedCount !== undefined) {
+      process.stderr.write(
+        `Scoped to ${scopedCount} of ${docCount} docs (warnings only; errors cover the whole bundle).\n`
+      );
     }
     if (diagnostics.length === 0) {
       process.stderr.write(`OKF ${version}: no problems found.\n`);
@@ -348,6 +390,14 @@ async function rootError(
   }
 }
 
+/**
+ * The stderr line for an error that escaped `run`. Messages can carry hostile
+ * paths (fs errors) or git's echo of a CLI argument, so they are sanitized.
+ */
+export function errorLine(err: unknown): string {
+  return `Error: ${terminalSafe(err instanceof Error ? err.message : String(err))}\n`;
+}
+
 /** True when this file is the process entrypoint (not an import). */
 function isMain(): boolean {
   const entry = process.argv[1];
@@ -365,7 +415,7 @@ if (isMain()) {
       process.exitCode = code;
     })
     .catch((err: unknown) => {
-      process.stderr.write(`Error: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.stderr.write(errorLine(err));
       process.exitCode = 1;
     });
 }

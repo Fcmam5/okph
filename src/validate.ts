@@ -1,10 +1,10 @@
-import { readFile, stat } from "node:fs/promises";
+import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { marked } from "marked";
 import { discover, isReservedFile } from "./discover.js";
 import { MAX_DOC_BYTES } from "./limits.js";
 import { parseDoc, splitFrontmatter } from "./parse.js";
-import { terminalSafe } from "./security.js";
+import { own, terminalSafe } from "./security.js";
 
 /** Severity of a validation diagnostic. */
 export type DiagnosticLevel = "error" | "warning";
@@ -27,7 +27,23 @@ export interface ValidateResult {
   readonly version: string;
   readonly errorCount: number;
   readonly warningCount: number;
+  /** Documents scanned. */
+  readonly docCount: number;
+  /** Scanned documents inside {@link ValidateOptions.scope}; absent when unscoped. */
+  readonly scopedCount?: number;
 }
+
+/**
+ * Warning kinds that describe the whole bundle, not one document: they stay
+ * visible when validation is scoped. `orphan` depends on links from every
+ * other document, so a changed link can orphan a document that never changed.
+ */
+const BUNDLE_WIDE_WARNINGS: ReadonlySet<string> = new Set([
+  "okf-version-format",
+  "okf-version-unsupported",
+  "orphan",
+  "recommended-index",
+]);
 
 /** Every warning rule id. Only these can be ignored; errors (spec MUSTs) cannot. */
 export const WARNING_KINDS = [
@@ -56,6 +72,12 @@ export type WarningKind = (typeof WARNING_KINDS)[number];
 export interface ValidateOptions {
   /** Warning kinds to suppress. Ignored findings are not counted. */
   readonly ignore?: readonly WarningKind[];
+  /**
+   * Root-relative document paths to report warnings for. The whole bundle is
+   * still scanned and every error is kept; only warnings on other documents
+   * are dropped, except bundle-wide kinds (orphans, index, version).
+   */
+  readonly scope?: readonly string[];
 }
 
 /** OKF versions this build knows how to check. Newest first. */
@@ -91,11 +113,13 @@ export async function validate(
   root: string,
   options: ValidateOptions = {}
 ): Promise<ValidateResult> {
-  const ignore = new Set<string>(options.ignore);
+  const ignore = new Set<string>(own(options, "ignore"));
   const files = await discover(root);
   const known = new Set(files);
   const diagnostics: Diagnostic[] = [];
   const incoming = new Map<string, number>();
+  const realRoot = await realpath(root);
+  const inBundle = (rel: string) => existsInside(realRoot, path.join(root, rel));
 
   const version = await resolveVersion(root, files, diagnostics);
 
@@ -130,7 +154,7 @@ export async function validate(
             target: field.value,
             message: `${field.name} resolves above the bundle root: ${terminalSafe(field.value)}`,
           });
-        } else if (!(await exists(path.join(root, target)))) {
+        } else if (!(await inBundle(target))) {
           diagnostics.push({
             level: "warning",
             kind: "missing-resource",
@@ -178,7 +202,7 @@ export async function validate(
             message: `link to a document that does not exist: ${terminalSafe(link.href)}`,
           });
         }
-      } else if (!(await exists(path.join(root, target)))) {
+      } else if (!(await inBundle(target))) {
         diagnostics.push({
           level: "warning",
           kind: "missing-file",
@@ -209,7 +233,14 @@ export async function validate(
     }
   }
 
-  const kept = diagnostics.filter((d) => d.level === "error" || !ignore.has(d.kind));
+  const scopeOption = own(options, "scope");
+  const scope = scopeOption && new Set(scopeOption);
+  const kept = diagnostics.filter(
+    (d) =>
+      d.level === "error" ||
+      (!ignore.has(d.kind) &&
+        (!scope || scope.has(d.path) || BUNDLE_WIDE_WARNINGS.has(d.kind)))
+  );
   const deduped = dedupe(kept).sort(
     (a, b) =>
       a.path.localeCompare(b.path) ||
@@ -222,6 +253,8 @@ export async function validate(
     version,
     errorCount,
     warningCount: deduped.length - errorCount,
+    docCount: files.length,
+    ...(scope && { scopedCount: files.filter((f) => scope.has(f)).length }),
   };
 }
 
@@ -522,11 +555,15 @@ function resolvePath(rel: string, value: string): string | null {
   return target;
 }
 
-/** True when `p` exists on disk. */
-async function exists(p: string): Promise<boolean> {
+/**
+ * True when `p` exists and, after following symlinks, stays inside the bundle.
+ * A link out of the bundle reads as missing, so a hostile bundle can't probe
+ * for files elsewhere on the machine.
+ */
+async function existsInside(realRoot: string, p: string): Promise<boolean> {
   try {
-    await stat(p);
-    return true;
+    const real = await realpath(p);
+    return real === realRoot || real.startsWith(realRoot + path.sep);
   } catch {
     return false;
   }

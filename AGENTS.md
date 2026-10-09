@@ -47,12 +47,14 @@ This tool is used in security-sensitive environments. Everything it reads is hos
 
 - **Untrusted input everywhere it prints.** Filenames, file contents, frontmatter values, and CLI args pass through `terminalSafe` before stdout/stderr; link targets through `safeHref`. New output paths must do the same — terminal/CI-log injection is a real risk class here.
 - **Read-only and offline.** Never write into a scanned bundle, never make network calls, never interpolate input into shell commands (`execFile` + argv arrays only).
+- **No prototype-chain reads.** Read option bags through `own()` (`src/security.ts`); frontmatter objects are prototype-less. Never read `options.x` directly.
 - **Bounded resources.** `MAX_DOC_BYTES` caps file size; check size before reading, not after. New code that reads files or follows links must respect the same limits.
 - **Fail closed.** Unreadable paths, oversized files, and unparseable input produce diagnostics or clean exits — never crashes, never silent acceptance.
 
 ## Conventions
 
 - **Spec-first.** `okf/v02-SPEC.md` decides what is an error vs a warning: `validate` errors are spec MUSTs (§11); warnings are SHOULDs and tolerated issues. Do not invent requirements, and do not reject bundles for things §11 says consumers must tolerate (broken links, missing `index.md`, unknown keys).
+- **Scoped validation never hides errors.** `validate --git` scans the whole bundle and reports every error; only warnings are scoped. `orphan`, `recommended-index` and `okf-version-*` stay bundle-wide, and `index.md`/`log.md` links count toward scope. If scoping fails, validate everything.
 - **Reserved files aren't dependencies.** Links out of `index.md`/`log.md` are excluded from dependents/affected via `isReservedFile` — filename-based, no edge type field.
 
 ## Boundaries

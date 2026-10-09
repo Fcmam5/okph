@@ -14,6 +14,12 @@ npm i -g @fcmam5/okph
 pnpm i -g @fcmam5/okph
 ```
 
+Or run it without installing — e.g. in a CI job to validate a bundle:
+
+```bash
+npx @fcmam5/okph validate ./docs --git origin/main
+```
+
 ## CLI
 
 ```bash
@@ -32,10 +38,13 @@ okph affected --git main --root docs --md  # same, as a markdown link list
 okph affected --git main --root docs --exclude '**/{index,log}.md'  # skip files entirely
 okph validate ./docs                  # check the bundle against the OKF spec
 okph validate ./docs --strict         # also fail on warnings (CI gate)
+okph validate ./docs --git main       # all errors, but warnings only for docs changed since main
 okph validate ./docs --strict --ignore prefer-absolute-links  # keep relative links, skip that warning
 ```
 
 `validate` checks a bundle against the OKF spec and prints findings as `path -> target [level] kind: message`, sorted by path. Errors are spec MUSTs (missing or unparseable frontmatter, missing `type`, `index.md`/`log.md` misuse); warnings are spec SHOULDs and tolerated problems (broken links, missing files named by `resource`/`computation`/`executor`/`attester`, relative links, orphans, malformed `status`/`tags`/`generated`/`verified`, missing `description`). Exits `1` on any error — warnings pass unless `--strict` is set.
+
+`validate --git <base>` is an opt-in speed-up for PR checks. It still scans the whole bundle and reports **every error**; only *warnings* are limited to markdown files changed or deleted since `<base>` and their dependents (links from `index.md`/`log.md` count here, so a broken listing entry is still reported). `orphan`, `recommended-index` and `okf-version-*` warnings are always kept, because a changed link can orphan a document that never changed. A summary line on stderr says how many docs were in scope. Git failures (unknown `<base>`, not a repository) exit non-zero rather than passing. It is not a substitute for a full `validate` run on your main branch.
 
 `--ignore <kind>` suppresses a warning kind (repeatable); ignored findings are neither printed nor counted, so `--strict` skips them. Errors can't be ignored, and unknown kinds are rejected. Kinds: `escapes-bundle`, `invalid-generated`, `invalid-status`, `invalid-tags`, `invalid-verified`, `log-date-order`, `missing-doc`, `missing-file`, `missing-resource`, `missing-source-resource`, `okf-version-format`, `okf-version-unsupported`, `orphan`, `prefer-absolute-links`, `recommended-description`, `recommended-index`. The kind is the word after `[warning]` in the output. Example: if your bundle lives in `docs/` and your links are relative (`../concepts/x.md`) so they stay clickable in your editor, `--ignore prefer-absolute-links` stops the validator from warning about them. A `/`-prefixed link means "from the bundle root", but editors resolve it from the repo root, so it would break there.
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseDoc } from "../src/parse.js";
+import { parseDoc, splitFrontmatter } from "../src/parse.js";
 
 describe("parseDoc links", () => {
   it("resolves an internal link relative to the doc's directory", () => {
@@ -100,5 +100,22 @@ describe("parseDoc title", () => {
   it("falls back to filename stem", () => {
     const doc = parseDoc("no heading here", "nested/ledger.md");
     expect(doc.title).toBe("ledger");
+  });
+});
+
+describe("splitFrontmatter output hygiene", () => {
+  it("never lets the yaml library print document content as a process warning", async () => {
+    const warnings: Error[] = [];
+    const onWarning = (w: Error) => warnings.push(w);
+    process.on("warning", onWarning);
+    try {
+      const { frontmatter, malformed } = splitFrontmatter("---\nx: !foo y\u001b[31mRED\n---\n# A\n");
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(malformed).toBe(false);
+      expect(frontmatter).toHaveProperty("x");
+      expect(warnings).toEqual([]);
+    } finally {
+      process.off("warning", onWarning);
+    }
   });
 });
