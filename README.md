@@ -40,9 +40,21 @@ okph validate ./docs                  # check the bundle against the OKF spec
 okph validate ./docs --strict         # also fail on warnings (CI gate)
 okph validate ./docs --git main       # all errors, but warnings only for docs changed since main
 okph validate ./docs --strict --ignore prefer-absolute-links  # keep relative links, skip that warning
+okph readme README.md --root docs          # print README.md with the doc graph injected
+okph readme README.md --root docs --write  # update README.md in place
+okph readme README.md --root docs --check  # CI: exit 1 if the graph block is stale
 ```
 
 `validate` checks a bundle against the OKF spec and prints findings as `path -> target [level] kind: message`, sorted by path. Errors are spec MUSTs (missing or unparseable frontmatter, missing `type`, `index.md`/`log.md` misuse); warnings are spec SHOULDs and tolerated problems (broken links, missing files named by `resource`/`computation`/`executor`/`attester`, relative links, orphans, malformed `status`/`tags`/`generated`/`verified`, missing `description`). Exits `1` on any error — warnings pass unless `--strict` is set.
+
+`readme <file.md>` keeps a generated Mermaid graph in a README up to date. Put marker comments, each on its own line, where the graph should go:
+
+```md
+<!-- okph:start -->
+<!-- okph:end -->
+```
+
+Whatever sits between them is replaced with a fenced `mermaid` block. By default the updated file is printed to stdout and nothing on disk changes; `--write` rewrites the file (atomically, keeping its permissions), and `--check` exits `1` when the block is stale without writing — handy as a CI gate. The scan covers the README's own directory unless you pass `--root <dir>`; `--base-url` and `--allow-large` behave as for `graph`. Missing, duplicated, or out-of-order markers are an error and nothing is changed. Markers shown inside fenced code blocks are ignored, and symlinked READMEs are refused.
 
 `validate --git <base>` is an opt-in speed-up for PR checks. It still scans the whole bundle and reports **every error**; only *warnings* are limited to markdown files changed or deleted since `<base>` and their dependents (links from `index.md`/`log.md` count here, so a broken listing entry is still reported). `orphan`, `recommended-index` and `okf-version-*` warnings are always kept, because a changed link can orphan a document that never changed. A summary line on stderr says how many docs were in scope. Git failures (unknown `<base>`, not a repository) exit non-zero rather than passing. It is not a substitute for a full `validate` run on your main branch.
 

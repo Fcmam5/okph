@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 import { realpathSync } from "node:fs";
-import { stat } from "node:fs/promises";
+import { lstat, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { injectGraph, writeFileAtomic } from "../src/readme.js";
 import {
+  MAX_DOC_BYTES,
   changedMarkdownFiles,
   generateMermaid,
   getAffected,
@@ -26,6 +28,7 @@ import {
 } from "../src/index.js";
 
 const DOC_COMMANDS = new Set(["deps", "dependents", "affected"]);
+const KNOWN_COMMANDS = new Set([...DOC_COMMANDS, "graph", "validate", "readme"]);
 
 /** `- [Title](path)` lines for `--md` output. */
 function mdLines(
@@ -97,6 +100,7 @@ Usage:
   okph affected <file> [--root <dir>] [--graph] [--md] [--exclude <glob>...]
   okph affected --git <base> [--root <dir>] [--graph] [--md] [--exclude <glob>...]
   okph validate [path] [--git <base>] [--strict] [--ignore <kind>...]
+  okph readme <file.md> [--root <dir>] [--base-url <url>] [--allow-large] [--write | --check]
 
 Options:
   --base-url <url>  Emit absolute links joined onto <url> (graph clicks and
@@ -126,6 +130,11 @@ Options:
                     findings are not printed or counted. Errors can't be ignored.
                     E.g. --ignore prefer-absolute-links.
                     Kinds: ${WARNING_KINDS.join(", ")}.
+  --write           readme: rewrite <file.md> in place. Without it, the updated
+                    file is printed to stdout and nothing on disk changes.
+  --check           readme: exit non-zero if the generated block is stale (CI gate).
+                    The block sits between <!-- okph:start --> and <!-- okph:end -->
+                    marker lines; <file.md>'s directory is scanned unless --root is given.
   -h, --help        Show this help.
 `;
 
@@ -149,6 +158,8 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
       ignore: { type: "string", multiple: true },
       root: { type: "string" },
       strict: { type: "boolean" },
+      write: { type: "boolean" },
+      check: { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },
   });
@@ -160,7 +171,7 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
 
   const [command, target] = positionals;
 
-  if (command !== "graph" && command !== "validate" && !DOC_COMMANDS.has(command ?? "")) {
+  if (!KNOWN_COMMANDS.has(command ?? "")) {
     process.stderr.write(
       `Unknown or missing command: ${command === undefined ? "(none)" : terminalSafe(command)}\n\n${USAGE}`
     );
@@ -204,10 +215,20 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
     );
     return 1;
   }
-  if (values.root !== undefined && !DOC_COMMANDS.has(command ?? "")) {
+  if (values.root !== undefined && !DOC_COMMANDS.has(command ?? "") && command !== "readme") {
     process.stderr.write(
       `Error: --root is only supported by the deps, dependents, and affected commands. Pass the directory to graph instead.\n\n${USAGE}`
     );
+    return 1;
+  }
+  for (const flag of ["write", "check"] as const) {
+    if (values[flag] && command !== "readme") {
+      process.stderr.write(`Error: --${flag} is only supported by the readme command.\n\n${USAGE}`);
+      return 1;
+    }
+  }
+  if (values.write && values.check) {
+    process.stderr.write(`Error: --write and --check cannot be combined.\n\n${USAGE}`);
     return 1;
   }
   const gitMode = command === "affected" && values.git !== undefined;
@@ -363,6 +384,64 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
   const options: { baseUrl?: string; allowLarge?: boolean } = {};
   if (values["base-url"]) options.baseUrl = values["base-url"];
   if (values["allow-large"]) options.allowLarge = true;
+
+  if (command === "readme") {
+    const file = path.resolve(cwd, target);
+    const shown = terminalSafe(target);
+    if (!file.toLowerCase().endsWith(".md")) {
+      process.stderr.write(`Error: ${shown} is not a markdown file.\n`);
+      return 1;
+    }
+    let info;
+    try {
+      info = await lstat(file);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      process.stderr.write(
+        code === "ENOENT"
+          ? `Error: ${shown} does not exist.\n`
+          : `Error: cannot read ${shown}: ${code ?? "unknown error"}\n`
+      );
+      return 1;
+    }
+    if (info.isSymbolicLink() || !info.isFile()) {
+      process.stderr.write(`Error: ${shown} must be a regular file (a symlink is not followed).\n`);
+      return 1;
+    }
+    if (info.size > MAX_DOC_BYTES) {
+      process.stderr.write(`Error: ${shown} exceeds the ${MAX_DOC_BYTES} byte limit.\n`);
+      return 1;
+    }
+    const root = values.root === undefined ? path.dirname(file) : path.resolve(cwd, values.root);
+    if (values.root !== undefined) {
+      const problem = await rootError(root, values.root);
+      if (problem) {
+        process.stderr.write(problem);
+        return 1;
+      }
+    }
+    const content = await readFile(file, "utf8");
+    const updated = injectGraph(content, await generateMermaid(root, options));
+    if (values.check) {
+      if (updated === content) {
+        process.stderr.write(`${shown} is up to date.\n`);
+        return 0;
+      }
+      process.stderr.write(`${shown} is stale. Run: okph readme ${shown} --write\n`);
+      return 1;
+    }
+    if (!values.write) {
+      process.stdout.write(updated);
+      return 0;
+    }
+    if (updated === content) {
+      process.stderr.write(`${shown} is already up to date.\n`);
+      return 0;
+    }
+    await writeFileAtomic(file, updated, info.mode & 0o777);
+    process.stderr.write(`Updated ${shown}.\n`);
+    return 0;
+  }
   const mermaid = await generateMermaid(path.resolve(cwd, target), options);
 
   process.stdout.write(mermaid + "\n");
