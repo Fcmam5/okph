@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { run, errorLine } from "../bin/okph.js";
+import { capture } from "./helpers.js";
 import { MAX_DOC_BYTES } from "../src/limits.js";
 
 let repo: string;
@@ -30,23 +31,6 @@ beforeAll(async () => {
 });
 
 afterAll(() => rm(repo, { recursive: true, force: true }));
-
-/** Run the CLI with both streams captured. */
-async function capture(argv: string[], at: string) {
-  const out = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
-  const err = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-  try {
-    const code = await run(argv, at);
-    return {
-      code,
-      stdout: out.mock.calls.map((c) => String(c[0])).join(""),
-      stderr: err.mock.calls.map((c) => String(c[0])).join(""),
-    };
-  } finally {
-    out.mockRestore();
-    err.mockRestore();
-  }
-}
 
 describe("run", () => {
   it("does not execute on import", () => {

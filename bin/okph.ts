@@ -31,11 +31,11 @@ const DOC_COMMANDS = new Set(["deps", "dependents", "affected"]);
 const KNOWN_COMMANDS = new Set([...DOC_COMMANDS, "graph", "validate", "readme"]);
 
 /** Quote `arg` for a POSIX shell when it has anything but plain path characters. */
-const shellArg = (arg: string) =>
+export const shellArg = (arg: string) =>
   /^[\w./@:+=-]+$/.test(arg) ? arg : `'${arg.replace(/'/g, "'\\''")}'`;
 
 /** `- [Title](path)` lines for `--md` output. */
-function mdLines(
+export function mdLines(
   graph: Graph,
   paths: readonly string[],
   display: (rel: string) => string,
@@ -174,6 +174,7 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
   }
 
   const [command, target] = positionals;
+  const isDocCommand = DOC_COMMANDS.has(command ?? "");
 
   if (!KNOWN_COMMANDS.has(command ?? "")) {
     process.stderr.write(
@@ -181,19 +182,19 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
     );
     return 1;
   }
-  if (values["include-nav"] && !DOC_COMMANDS.has(command ?? "")) {
+  if (values["include-nav"] && !isDocCommand) {
     process.stderr.write(
       `Error: --include-nav is only supported by the deps, dependents, and affected commands.\n\n${USAGE}`
     );
     return 1;
   }
-  if (values.md && !DOC_COMMANDS.has(command ?? "")) {
+  if (values.md && !isDocCommand) {
     process.stderr.write(
       `Error: --md is only supported by the deps, dependents, and affected commands.\n\n${USAGE}`
     );
     return 1;
   }
-  if (values.exclude !== undefined && !DOC_COMMANDS.has(command ?? "")) {
+  if (values.exclude !== undefined && !isDocCommand) {
     process.stderr.write(
       `Error: --exclude is only supported by the deps, dependents, and affected commands.\n\n${USAGE}`
     );
@@ -219,7 +220,7 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
     );
     return 1;
   }
-  if (values.root !== undefined && !DOC_COMMANDS.has(command ?? "") && command !== "readme") {
+  if (values.root !== undefined && !isDocCommand && command !== "readme") {
     process.stderr.write(
       `Error: --root is only supported by the deps, dependents, and affected commands. Pass the directory to graph instead.\n\n${USAGE}`
     );
@@ -247,7 +248,7 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
     return 1;
   }
 
-  if (command && DOC_COMMANDS.has(command)) {
+  if (isDocCommand) {
     const root = values.root === undefined ? cwd : path.resolve(cwd, values.root);
     if (values.root !== undefined) {
       const problem = await rootError(root, values.root);
@@ -355,7 +356,7 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
         scope = seeds.length > 0 ? getAffected(graph, seeds, { includeNav: true }) : [];
       } catch (err) {
         process.stderr.write(
-          `Could not scope to changed docs (${terminalSafe(err instanceof Error ? err.message : String(err))}); validating the whole bundle.\n`
+          `Could not scope to changed docs (${terminalSafe(messageOf(err))}); validating the whole bundle.\n`
         );
       }
     }
@@ -408,7 +409,7 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
       );
       return 1;
     }
-    if (info.isSymbolicLink() || !info.isFile()) {
+    if (!info.isFile()) {
       process.stderr.write(`Error: ${shown} must be a regular file (a symlink is not followed).\n`);
       return 1;
     }
@@ -480,27 +481,31 @@ async function rootError(
  * paths (fs errors) or git's echo of a CLI argument, so they are sanitized.
  */
 export function errorLine(err: unknown): string {
-  return `Error: ${terminalSafe(err instanceof Error ? err.message : String(err))}\n`;
+  return `Error: ${terminalSafe(messageOf(err))}\n`;
 }
 
-/** True when this file is the process entrypoint (not an import). */
-function isMain(): boolean {
-  const entry = process.argv[1];
+const messageOf = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
+/** True when `entry` (process.argv[1]) is the module at `moduleUrl`, i.e. it is the entrypoint, not an import. */
+export function isMain(entry: string | undefined, moduleUrl: string): boolean {
   if (!entry) return false;
   try {
-    return realpathSync(entry) === fileURLToPath(import.meta.url);
+    return realpathSync(entry) === fileURLToPath(moduleUrl);
   } catch {
     return false;
   }
 }
 
-if (isMain()) {
-  run(process.argv.slice(2))
-    .then((code) => {
-      process.exitCode = code;
-    })
-    .catch((err: unknown) => {
-      process.stderr.write(errorLine(err));
-      process.exitCode = 1;
-    });
+/** Run the CLI and turn its result or error into the process exit code and stderr. */
+export async function main(argv: string[]): Promise<void> {
+  try {
+    process.exitCode = await run(argv);
+  } catch (err) {
+    process.stderr.write(errorLine(err));
+    process.exitCode = 1;
+  }
 }
+
+/* v8 ignore start -- @preserve: entrypoint guard; exercised by the subprocess tests, which v8 coverage cannot see */
+if (isMain(process.argv[1], import.meta.url)) void main(process.argv.slice(2));
+/* v8 ignore stop -- @preserve */

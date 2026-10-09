@@ -69,3 +69,21 @@ describe("renderMermaid", () => {
     expect(out.match(/style /g)).toHaveLength(1);
   });
 });
+
+describe("renderMermaid defensive output", () => {
+  it("skips an edge whose endpoint is not a node", () => {
+    const out = renderMermaid({
+      nodes: graph.nodes.filter((n) => n.path === "a.md"),
+      edges: [{ from: "a.md", to: "ghost.md" }],
+    });
+    expect(out).not.toContain("-->");
+    expect(out).not.toContain("ghost");
+  });
+
+  it("omits the click directive for a path that cannot be made a safe href", () => {
+    const g = buildGraph([{ path: 'we"ird.md', title: "W", links: [] }]);
+    const out = renderMermaid(g);
+    expect(out).toContain('["W"]');
+    expect(out).not.toContain("click");
+  });
+});

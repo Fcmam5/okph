@@ -14,6 +14,7 @@ okph is a TypeScript CLI + library (`@fcmam5/okph`) that builds a dependency gra
 - `pnpm test` — vitest.
 - `pnpm typecheck` — `tsc --noEmit`.
 - `pnpm lint` — `oxlint .`.
+- `pnpm test:cov` — vitest with coverage; `vitest.config.ts` enforces minimum coverage (95% statements/functions/lines, 90% branches; CI runs this). Don't add `v8 ignore` hints to dodge it; the only one is the entrypoint guard in `bin/okph.ts`, covered by subprocess tests instead.
 - `pnpm build` — tsdown → `dist/`.
 
 Run test + typecheck + lint before considering any change done.

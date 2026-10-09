@@ -1,6 +1,6 @@
 import path from "node:path";
 import YAML from "yaml";
-import { marked, type Token } from "marked";
+import { marked, type Token, type Tokens } from "marked";
 
 /** A link discovered in a document body, classified for graph building. */
 export interface ParsedLink {
@@ -64,10 +64,10 @@ export function splitFrontmatter(content: string): {
   if (!match) return { frontmatter: Object.create(null), body: content, malformed: false };
   const body = content.slice(match[0].length);
   try {
-    // logLevel "silent": yaml otherwise prints warnings, with the raw source
-    // line, to stderr via process.emitWarning — an unsanitized output path.
-    // Silent also stops `parse` from throwing, so errors are checked here.
-    const doc = YAML.parseDocument(match[1]!, { logLevel: "silent" });
+    // parseDocument, not parse: parse() prints warnings (with the raw source
+    // line) to stderr via process.emitWarning — an unsanitized output path —
+    // and throws on errors, which are checked explicitly here instead.
+    const doc = YAML.parseDocument(match[1]!);
     const parsed = doc.errors.length === 0 ? doc.toJS() : undefined;
     // Frontmatter is always a key/value mapping (§2, §4.1) — a YAML list or
     // scalar block is malformed, not a frontmatter object.
@@ -104,8 +104,8 @@ function deriveTitle(
   if (typeof fmTitle === "string" && fmTitle.trim()) return fmTitle.trim();
 
   for (const token of tokens) {
-    if (token.type === "heading" && (token as { depth?: number }).depth === 1) {
-      const text = inlineText((token as { tokens?: Token[] }).tokens).trim();
+    if (token.type === "heading" && (token as Tokens.Heading).depth === 1) {
+      const text = inlineText((token as Tokens.Heading).tokens).trim();
       if (text) return text;
     }
   }
@@ -117,8 +117,8 @@ function extractLinks(tokens: Token[], docRelPath: string): ParsedLink[] {
   const links: ParsedLink[] = [];
   walk(tokens, (token) => {
     if (token.type !== "link") return;
-    const href = String((token as { href?: unknown }).href ?? "").trim();
-    const text = String((token as { text?: unknown }).text ?? "").trim();
+    const href = (token as Tokens.Link).href.trim();
+    const text = (token as Tokens.Link).text.trim();
     const link = classify(href, text, docRelPath);
     if (link) links.push(link);
   });
@@ -158,13 +158,12 @@ function classify(href: string, text: string, docRelPath: string): ParsedLink | 
 }
 
 /** Flatten inline tokens to plain text, dropping markdown formatting. */
-function inlineText(tokens: Token[] | undefined): string {
-  if (!tokens) return "";
+function inlineText(tokens: Token[]): string {
   return tokens
     .map((t) => {
       const children = (t as { tokens?: Token[] }).tokens;
       if (children) return inlineText(children);
-      return String((t as { text?: unknown }).text ?? (t as { raw?: unknown }).raw ?? "");
+      return (t as { text?: string }).text ?? t.raw;
     })
     .join("");
 }
@@ -196,13 +195,13 @@ function* childTokens(token: Token): Generator<Token[]> {
   const t = token as {
     tokens?: Token[];
     items?: Token[];
-    header?: { tokens?: Token[] }[];
-    rows?: { tokens?: Token[] }[][];
+    header?: Tokens.TableCell[];
+    rows?: Tokens.TableCell[][];
   };
   if (t.tokens) yield t.tokens;
   if (t.items) yield t.items;
-  for (const cell of t.header ?? []) if (cell.tokens) yield cell.tokens;
+  for (const cell of t.header ?? []) yield cell.tokens;
   for (const row of t.rows ?? []) {
-    for (const cell of row) if (cell.tokens) yield cell.tokens;
+    for (const cell of row) yield cell.tokens;
   }
 }

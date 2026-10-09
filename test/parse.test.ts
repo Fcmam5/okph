@@ -119,3 +119,74 @@ describe("splitFrontmatter output hygiene", () => {
     }
   });
 });
+
+describe("parseDoc edge cases", () => {
+  it("drops a link with an empty destination", () => {
+    expect(parseDoc("[nothing]() and [x](b.md)", "a.md").links.map((l) => l.target)).toEqual(["b.md"]);
+  });
+
+  it("falls back to the filename stem for an empty H1", () => {
+    expect(parseDoc("#\n\nbody", "nested/ledger.md").title).toBe("ledger");
+  });
+
+  it("skips an empty H1 and uses the next non-empty one", () => {
+    expect(parseDoc("#\n\n# Real", "a.md").title).toBe("Real");
+  });
+
+  it("flattens emphasis, code and a hard break in a heading title", () => {
+    expect(parseDoc("# *Bold* `code` end", "a.md").title).toBe("Bold code end");
+    expect(parseDoc("Line one  \nline two\n=====\n", "a.md").title).toContain("Line one");
+  });
+
+  it("finds links inside list items and table cells", () => {
+    const md = "- [L](l.md)\n\n| H [h](h.md) |\n| --- |\n| [c](c.md) |\n";
+    expect(parseDoc(md, "a.md").links.map((l) => l.target).sort()).toEqual(["c.md", "h.md", "l.md"]);
+  });
+
+  it("keeps the fragment of an internal link and drops a pure anchor", () => {
+    const links = parseDoc("[a](b.md#sec) [self](#top)", "a.md").links;
+    expect(links).toEqual([
+      { text: "a", href: "b.md#sec", kind: "internal", target: "b.md", fragment: "sec" },
+    ]);
+  });
+
+  it("classifies schemes and protocol-relative URLs as external", () => {
+    const kinds = parseDoc("[a](mailto:x@y.z) [b](//cdn.example/x) [c](https://e.x)", "a.md").links.map(
+      (l) => l.kind
+    );
+    expect(kinds).toEqual(["external", "external", "external"]);
+  });
+
+  it("keeps the raw input for a malformed percent-escape", () => {
+    expect(parseDoc("[a](b%E0%A4%A.md)", "a.md").links[0]!.target).toBe("b%E0%A4%A.md");
+  });
+
+  it("uses a frontmatter title and ignores a non-string one", () => {
+    expect(parseDoc("---\ntitle: Front\n---\n# H1\n", "a.md").title).toBe("Front");
+    expect(parseDoc("---\ntitle: 42\n---\n# H1\n", "a.md").title).toBe("H1");
+  });
+});
+
+describe("splitFrontmatter shapes", () => {
+  it("rejects a YAML list or scalar block as malformed", () => {
+    expect(splitFrontmatter("---\n- a\n- b\n---\nbody").malformed).toBe(true);
+    expect(splitFrontmatter("---\njust text\n---\nbody").malformed).toBe(true);
+  });
+
+  it("tolerates a BOM and CRLF line endings", () => {
+    const r = splitFrontmatter("\uFEFF---\r\ntype: T\r\n---\r\nbody");
+    expect(r.frontmatter).toEqual({ type: "T" });
+    expect(r.body).toBe("body");
+  });
+
+  it("treats an unclosed fence as no frontmatter", () => {
+    const r = splitFrontmatter("---\ntype: T\nbody");
+    expect(r.malformed).toBe(false);
+    expect(Object.keys(r.frontmatter)).toEqual([]);
+  });
+
+  it("flags excessive YAML aliases instead of expanding them", () => {
+    const bomb = ["a: &a [x,x,x,x,x,x,x,x,x,x]", ...Array.from({ length: 150 }, (_, i) => `k${i}: *a`)].join("\n");
+    expect(splitFrontmatter(`---\n${bomb}\n---\n`).malformed).toBe(true);
+  });
+});

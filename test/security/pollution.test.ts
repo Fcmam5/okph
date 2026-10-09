@@ -2,8 +2,8 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { getAffected, loadGraph, parseDoc, renderMermaid, validate } from "../src/index.js";
-import { buildGraph } from "../src/graph.js";
+import { getAffected, loadGraph, parseDoc, renderMermaid, validate } from "../../src/index.js";
+import { buildGraph } from "../../src/graph.js";
 
 /** Run `fn` with `Object.prototype` polluted, always restoring it afterwards. */
 async function polluted<T>(props: Record<string, unknown>, fn: () => Promise<T> | T): Promise<T> {

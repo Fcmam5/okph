@@ -209,3 +209,9 @@ describe("inducedSubgraph", () => {
     ]);
   });
 });
+
+describe("neighborhood unknown file", () => {
+  it("returns an empty graph", () => {
+    expect(neighborhood(buildGraph(docs), "nope.md")).toEqual({ nodes: [], edges: [] });
+  });
+});

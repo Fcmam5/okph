@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { safeHref, escapeLabel, terminalSafe } from "../src/security.js";
+import { safeHref, escapeLabel, terminalSafe } from "../../src/security.js";
 
 describe("safeHref", () => {
   it("allows relative paths when no base url", () => {
@@ -90,5 +90,50 @@ describe("terminalSafe", () => {
 
   it("renders bidirectional controls as visible Unicode escapes", () => {
     expect(terminalSafe("safe\u202Ecod.exe")).toBe("safe\\u202Ecod.exe");
+  });
+});
+
+describe("safeHref remaining branches", () => {
+  it("rejects an http(s) URL the URL parser cannot read", () => {
+    expect(safeHref("https://")).toBeNull();
+    expect(safeHref("http://[bad")).toBeNull();
+  });
+
+  it("rejects any non-http(s) scheme written with //", () => {
+    for (const bad of ["ftp://example.com/x", "javascript://x", "file:///etc/passwd", "ws://h/x"]) {
+      expect(safeHref(bad)).toBeNull();
+      expect(safeHref(bad, "https://example.com/docs")).toBeNull();
+    }
+  });
+
+  it("accepts http and https URLs case-insensitively, normalized", () => {
+    expect(safeHref("HTTP://Example.com/a b")).toBe("http://example.com/a%20b");
+    expect(safeHref("https://example.com/x")).toBe("https://example.com/x");
+  });
+
+  it("rejects protocol-relative targets", () => {
+    expect(safeHref("//evil.example/x")).toBeNull();
+    expect(safeHref("//evil.example/x", "https://example.com/docs")).toBeNull();
+  });
+
+  it("rejects absolute and escaping paths when no base url is given", () => {
+    expect(safeHref("/etc/passwd")).toBeNull();
+    expect(safeHref("../outside.md")).toBeNull();
+    expect(safeHref("a/../../outside.md")).toBeNull();
+  });
+
+  it("rejects an unusable or non-http base url", () => {
+    expect(safeHref("a.md", "not a url")).toBeNull();
+    expect(safeHref("a.md", "ftp://example.com/docs")).toBeNull();
+    expect(safeHref("a.md", "javascript:alert(1)")).toBeNull();
+  });
+
+  it("joins onto a base with or without a trailing slash, and blocks traversal", () => {
+    expect(safeHref("a.md", "https://example.com/docs")).toBe("https://example.com/docs/a.md");
+    expect(safeHref("a.md", "https://example.com/docs/")).toBe("https://example.com/docs/a.md");
+    expect(safeHref("../x.md", "https://example.com/docs")).toBeNull();
+    expect(safeHref("%2e%2e/x.md", "https://example.com/docs")).toBe(
+      "https://example.com/docs/%252e%252e/x.md"
+    );
   });
 });

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2025-10-09
+
 ### Added
 
 - `okph readme <file.md>` — inject a generated Mermaid graph between `<!-- okph:start -->` / `<!-- okph:end -->` marker lines. Prints the updated file by default; `--write` rewrites it in place (atomic, symlinks refused); `--check` exits `1` when the block is stale. Supports `--root`, `--base-url`, `--allow-large`. Missing or malformed markers are an error and change nothing.

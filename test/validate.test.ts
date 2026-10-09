@@ -364,8 +364,271 @@ describe.skipIf(process.platform === "win32")("validate symlink containment", ()
     expect(at("missing-resource", "out/secret.txt")).toBe(true);
   });
 
+  it("does not treat a sibling directory sharing the bundle's name prefix as inside it", async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), "okph-prefix-"));
+    try {
+      const inner = path.join(parent, "bundle");
+      const evil = path.join(parent, "bundle-evil");
+      await mkdir(inner);
+      await mkdir(evil);
+      await writeFile(path.join(evil, "secret.txt"), "s");
+      await symlink(evil, path.join(inner, "out"));
+      await writeFile(path.join(inner, "index.md"), "# I\n\n* [A](/a.md)\n");
+      await writeFile(
+        path.join(inner, "a.md"),
+        "---\ntype: T\ndescription: d\n---\n[x](/out/secret.txt)\n"
+      );
+      const { diagnostics } = await validate(inner);
+      expect(diagnostics.some((d) => d.kind === "missing-file" && d.target === "out/secret.txt")).toBe(true);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
   it("still accepts a symlink that stays inside the bundle", async () => {
     const { diagnostics } = await validate(bundle);
     expect(diagnostics.some((d) => d.target === "inside.txt")).toBe(false);
+  });
+});
+
+describe("validate rule coverage", () => {
+  const made: string[] = [];
+  afterAll(async () => {
+    for (const d of made) await rm(d, { recursive: true, force: true });
+  });
+
+  async function fresh(files: Record<string, string>): Promise<string> {
+    const d = await mkdtemp(path.join(tmpdir(), "okph-rules-"));
+    made.push(d);
+    for (const [rel, content] of Object.entries(files)) {
+      const abs = path.join(d, rel);
+      await mkdir(path.dirname(abs), { recursive: true });
+      await writeFile(abs, content);
+    }
+    return d;
+  }
+
+  const INDEX = "# I\n\n* [A](/a.md)\n";
+  const fm = (extra = "") => `---\ntype: T\ndescription: d\n${extra}---\n# A\n`;
+  const found = async (files: Record<string, string>) =>
+    (await validate(await fresh({ "index.md": INDEX, ...files }))).diagnostics.map(
+      (d) => `${d.level}:${d.kind}:${d.path}`
+    );
+
+  it("ignores external links", async () => {
+    const out = await found({ "a.md": fm().replace("# A", "[x](https://e.x) [m](mailto:a@b.c) [p](//cdn.x/y)") });
+    expect(out).toEqual([]);
+  });
+
+  it("checks links: missing doc/file, existing file, escaping, relative form", async () => {
+    const d = await fresh({
+      "index.md": INDEX,
+      "a.md": fm().replace(
+        "# A",
+        "[d](/gone.md) [f](/gone.txt) [ok](/real.txt) [up](../../x.md) [rel](sub/b.md) [abs](/sub/b.md)"
+      ),
+      "real.txt": "r",
+      "sub/b.md": fm().replace("# A", "[back](/a.md)"),
+    });
+    const { diagnostics } = await validate(d);
+    const at = (kind: string, target?: string) =>
+      diagnostics.some((x) => x.kind === kind && (target === undefined || x.target === target));
+    expect(at("missing-doc", "gone.md")).toBe(true);
+    expect(at("missing-file", "gone.txt")).toBe(true);
+    expect(at("missing-file", "real.txt")).toBe(false);
+    expect(at("escapes-bundle", "../../x.md")).toBe(true);
+    expect(at("prefer-absolute-links", "sub/b.md")).toBe(true);
+    expect(diagnostics.filter((x) => x.kind === "prefer-absolute-links")).toHaveLength(1);
+  });
+
+  it("validates `sources`", async () => {
+    const out = await validate(
+      await fresh({
+        "index.md": INDEX,
+        "a.md": fm('sources:\n  - plain\n  - resource: ""\n  - resource: /ok.txt\n'),
+        "ok.txt": "x",
+      })
+    );
+    // Two bad entries share (path, kind, target), so dedupe keeps the first.
+    const msgs = out.diagnostics.filter((d) => d.kind === "missing-source-resource").map((d) => d.message);
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]).toContain("sources[0]");
+    const second = await validate(
+      await fresh({ "index.md": INDEX, "a.md": fm('sources:\n  - resource: /ok.txt\n  - resource: ""\n'), "ok.txt": "x" })
+    );
+    expect(second.diagnostics.map((d) => d.message).join()).toContain("sources[1]");
+    expect(await found({ "a.md": fm("sources: nope\n") })).toContain("warning:missing-source-resource:a.md");
+  });
+
+  it("validates `tags`", async () => {
+    expect(await found({ "a.md": fm("tags: [a, b]\n") })).toEqual([]);
+    expect(await found({ "a.md": fm("tags: solo\n") })).toContain("warning:invalid-tags:a.md");
+    expect(await found({ "a.md": fm("tags: [a, 1]\n") })).toContain("warning:invalid-tags:a.md");
+  });
+
+  it("validates `generated`", async () => {
+    expect(await found({ "a.md": fm("generated:\n  by: tool\n") })).toEqual([]);
+    for (const bad of ["generated: tool\n", "generated:\n  by: ''\n", "generated: [x]\n", "generated:\n  at: now\n"]) {
+      expect(await found({ "a.md": fm(bad) })).toContain("warning:invalid-generated:a.md");
+    }
+  });
+
+  it("validates `verified`, accepting a bare mapping as a one-element list", async () => {
+    expect(await found({ "a.md": fm("verified:\n  by: me\n  at: 2026-01-01\n") })).toEqual([]);
+    expect(await found({ "a.md": fm("verified:\n  - by: me\n    at: 2026-01-01\n") })).toEqual([]);
+    for (const bad of ["verified: me\n", "verified:\n  by: me\n", "verified:\n  - at: 2026-01-01\n", "verified:\n  - 7\n"]) {
+      expect(await found({ "a.md": fm(bad) })).toContain("warning:invalid-verified:a.md");
+    }
+  });
+
+  it("validates `status`", async () => {
+    for (const ok of ["draft", "stable", "deprecated"]) {
+      expect(await found({ "a.md": fm(`status: ${ok}\n`) })).toEqual([]);
+    }
+    expect(await found({ "a.md": fm("status: wip\n") })).toContain("warning:invalid-status:a.md");
+    expect(await found({ "a.md": fm("status: 3\n") })).toContain("warning:invalid-status:a.md");
+  });
+
+  it("checks path-valued fields against the bundle", async () => {
+    const d = await fresh({
+      "index.md": INDEX,
+      "docs/a.md": fm(
+        [
+          "resource: ./sibling.txt",
+          "computation: ../../escape.py",
+          "executor:\n  resource: /tools/run.sh",
+          "attester:\n  resource: missing/attest.md",
+          "sources:\n  - resource: bare.csv\n  - plain\n  - [x]",
+          "",
+        ].join("\n")
+      ),
+      "docs/sibling.txt": "s",
+    });
+    await writeFile(path.join(d, "index.md"), "# I\n\n* [A](/docs/a.md)\n");
+    const { diagnostics } = await validate(d);
+    const by = (kind: string) => diagnostics.filter((x) => x.kind === kind).map((x) => x.target);
+    expect(by("escapes-bundle")).toEqual(["../../escape.py"]);
+    expect(by("missing-resource").sort()).toEqual(["/tools/run.sh", "bare.csv", "missing/attest.md"]);
+  });
+
+  it("does not treat URIs, prose, scope names or non-strings as paths", async () => {
+    const out = await found({
+      "a.md": fm(
+        [
+          "resource: https://example.com/x.csv",
+          "computation: urn:isbn:123",
+          "executor:\n  resource: some free text.md",
+          "attester:\n  resource: scope-name",
+          "",
+        ].join("\n")
+      ),
+    });
+    expect(out).toEqual([]);
+    expect(await found({ "a.md": fm("sources:\n  - resource: 42\n") })).toContain(
+      "warning:missing-source-resource:a.md"
+    );
+    expect(await found({ "a.md": fm("executor: tool\nattester: [x]\n") })).toEqual([]);
+  });
+
+  it("applies the okf_version rules to the root index", async () => {
+    const withVersion = (v: string) => ({ "index.md": `---\nokf_version: ${v}\n---\n# I\n\n* [A](/a.md)\n`, "a.md": fm() });
+    const run = async (v: string) => (await validate(await fresh(withVersion(v)))).diagnostics.map((d) => d.kind);
+    expect(await run("'0.2'")).toEqual([]);
+    expect(await run("0.2")).toEqual(["okf-version-format"]);
+    expect(await run("'9.9'")).toEqual(["okf-version-unsupported"]);
+    const r = await validate(await fresh(withVersion("'9.9'")));
+    expect(r.version).toBe("0.2");
+  });
+
+  it("flags extra frontmatter on index files and skips concept rules for them", async () => {
+    const out = await found({
+      "a.md": fm(),
+      "index.md": "---\nokf_version: '0.2'\nextra: 1\n---\n# I\n\n* [A](/a.md)\n",
+      "sub/index.md": "---\nanything: 1\n---\n# S\n",
+    });
+    expect(out.filter((x) => x.includes("index-frontmatter")).sort()).toEqual([
+      "error:index-frontmatter:index.md",
+      "error:index-frontmatter:sub/index.md",
+    ]);
+  });
+
+  it("requires concept frontmatter, a type, and flags malformed YAML", async () => {
+    expect(await found({ "a.md": "# no frontmatter\n" })).toContain("error:missing-frontmatter:a.md");
+    expect(await found({ "a.md": "---\ndescription: d\n---\n# A\n" })).toContain("error:missing-type:a.md");
+    expect(await found({ "a.md": "---\ntype: '  '\n---\n# A\n" })).toContain("error:missing-type:a.md");
+    expect(await found({ "a.md": "---\n[: bad\n---\n# A\n" })).toContain("error:malformed-frontmatter:a.md");
+    expect(await found({ "a.md": "---\ntype: T\ndescription: ''\n---\n# A\n" })).toContain(
+      "warning:recommended-description:a.md"
+    );
+  });
+
+  it("reports a missing root index.md once", async () => {
+    const r = await validate(await fresh({ "a.md": fm() }));
+    expect(r.diagnostics.filter((d) => d.kind === "recommended-index")).toHaveLength(1);
+  });
+
+  it("sorts diagnostics by path, kind, then target", async () => {
+    const r = await validate(
+      await fresh({
+        "index.md": INDEX,
+        "a.md": fm().replace("# A", "[z](/zz.md) [y](/yy.md)"),
+      })
+    );
+    const keys = r.diagnostics.map((d) => `${d.path}|${d.kind}|${d.target ?? ""}`);
+    expect(keys).toEqual([...keys].sort((x, y) => x.localeCompare(y)));
+  });
+});
+
+describe("validate log.md rules", () => {
+  let logDir: string;
+  beforeAll(async () => {
+    logDir = await mkdtemp(path.join(tmpdir(), "okph-log-"));
+  });
+  afterAll(() => rm(logDir, { recursive: true, force: true }));
+
+  const logFor = async (body: string) => {
+    await writeFile(path.join(logDir, "index.md"), "# I\n");
+    await writeFile(path.join(logDir, "log.md"), body);
+    return (await validate(logDir)).diagnostics.filter((d) => d.path === "log.md");
+  };
+
+  it("accepts a title and newest-first dated headings", async () => {
+    expect(await logFor("# Changelog\n\n## 2026-02-01\n\nx\n\n## 2026-01-01\n")).toEqual([]);
+  });
+
+  it("allows frontmatter in log.md", async () => {
+    expect(await logFor("---\nanything: 1\n---\n## 2026-01-01\n")).toEqual([]);
+  });
+
+  it("errors on a non-date ## heading", async () => {
+    const out = await logFor("# T\n\n## Monday\n");
+    expect(out.map((d) => d.kind)).toEqual(["log-date-format"]);
+    expect(out[0]!.message).toContain("not a YYYY-MM-DD date");
+  });
+
+  it("errors on a date heading at the wrong level", async () => {
+    const out = await logFor("# T\n\n### 2026-01-01\n");
+    expect(out.map((d) => d.kind)).toEqual(["log-date-format"]);
+    expect(out[0]!.message).toContain("must be `##` level");
+  });
+
+  it("errors on a second title, and reports several bad headings as one finding", async () => {
+    const out = await logFor("# T\n\n# Another\n\n## Monday\n");
+    expect(out.map((d) => `${d.level}:${d.kind}`)).toEqual(["error:log-date-format"]);
+  });
+
+  it("errors on a level-1 date heading (a title may not be a date)", async () => {
+    const out = await logFor("# 2026-01-01\n");
+    expect(out.map((d) => `${d.level}:${d.kind}`)).toEqual(["error:log-date-format"]);
+  });
+
+  it("warns once when entries are not newest-first", async () => {
+    const out = await logFor("## 2026-01-01\n\n## 2026-02-01\n\n## 2026-03-01\n");
+    expect(out.map((d) => d.kind)).toEqual(["log-date-order"]);
+  });
+
+  it("sanitizes a hostile heading in the message", async () => {
+    const out = await logFor("## x\u001b[31mred\n");
+    expect(out[0]!.message).not.toContain("\u001b");
   });
 });

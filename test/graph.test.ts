@@ -61,3 +61,38 @@ describe("buildGraph", () => {
     expect(g.edges).toEqual([{ from: "a.md", to: "index.md" }]);
   });
 });
+
+describe("buildGraph edge cases", () => {
+  it("ignores external links and links to unknown documents", () => {
+    const g = buildGraph([
+      {
+        path: "a.md",
+        title: "A",
+        links: [
+          { text: "x", href: "https://example.com", kind: "external", target: "https://example.com" },
+          { text: "n", href: "nope.md", kind: "internal", target: "nope.md" },
+        ],
+      },
+    ]);
+    expect(g.edges).toEqual([]);
+  });
+
+  it("collapses duplicate links into one edge", () => {
+    const link = { text: "b", href: "b.md", kind: "internal" as const, target: "b.md" };
+    const g = buildGraph([
+      { path: "a.md", title: "A", links: [link, link] },
+      { path: "b.md", title: "B", links: [] },
+    ]);
+    expect(g.edges).toEqual([{ from: "a.md", to: "b.md" }]);
+  });
+
+  it("throws when two paths hash to the same node id", () => {
+    // Real 32-bit sha256-prefix collision (both map to n_ef7f8f80).
+    expect(() =>
+      buildGraph([
+        { path: "c16665.md", title: "X", links: [] },
+        { path: "c159097.md", title: "Y", links: [] },
+      ])
+    ).toThrow(/Node id collision/);
+  });
+});
