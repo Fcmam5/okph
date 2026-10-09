@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { realpathSync } from "node:fs";
-import { lstat, readFile, stat } from "node:fs/promises";
+import { constants, realpathSync } from "node:fs";
+import { lstat, open, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
@@ -425,7 +425,22 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
         return 1;
       }
     }
-    const content = await readFile(file, "utf8");
+    const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+    let content: string;
+    try {
+      info = await handle.stat();
+      if (!info.isFile()) {
+        process.stderr.write(`Error: ${shown} must be a regular file (a symlink is not followed).\n`);
+        return 1;
+      }
+      if (info.size > MAX_DOC_BYTES) {
+        process.stderr.write(`Error: ${shown} exceeds the ${MAX_DOC_BYTES} byte limit.\n`);
+        return 1;
+      }
+      content = await handle.readFile("utf8");
+    } finally {
+      await handle.close();
+    }
     const updated = injectGraph(content, await generateMermaid(root, options));
     if (values.check) {
       if (updated === content) {
