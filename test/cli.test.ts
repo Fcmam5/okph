@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import { chmod, mkdir, mkdtemp, readFile, symlink, writeFile, rm } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, stat, symlink, writeFile, rm } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -528,6 +528,29 @@ describe("readme", () => {
     await capture(["readme", "README.md", "--root", "docs", "--write"], dir);
     const fresh = await capture(["readme", "README.md", "--root", "docs", "--check"], dir);
     expect(fresh.code).toBe(0);
+  });
+
+  it.skipIf(process.platform === "win32")("--write keeps the file's permission bits", async () => {
+    await reset();
+    await chmod(readme(), 0o640);
+    await capture(["readme", "README.md", "--root", "docs", "--write"], dir);
+    expect((await stat(readme())).mode & 0o777).toBe(0o640);
+    expect(await readFile(readme(), "utf8")).toContain("```mermaid");
+  });
+
+  it("leaves no temp file behind after --write", async () => {
+    await reset();
+    await capture(["readme", "README.md", "--root", "docs", "--write"], dir);
+    const { readdir } = await import("node:fs/promises");
+    expect((await readdir(dir)).filter((f) => f.includes(".tmp"))).toEqual([]);
+  });
+
+  it("quotes a path with spaces in the suggested --write command", async () => {
+    const spaced = path.join(dir, "my notes.md");
+    await writeFile(spaced, MARKED);
+    const { stderr } = await capture(["readme", "my notes.md", "--root", "docs", "--check"], dir);
+    expect(stderr).toContain("okph readme 'my notes.md' --write");
+    await rm(spaced);
   });
 
   it("applies --base-url to click links", async () => {

@@ -30,6 +30,10 @@ import {
 const DOC_COMMANDS = new Set(["deps", "dependents", "affected"]);
 const KNOWN_COMMANDS = new Set([...DOC_COMMANDS, "graph", "validate", "readme"]);
 
+/** Quote `arg` for a POSIX shell when it has anything but plain path characters. */
+const shellArg = (arg: string) =>
+  /^[\w./@:+=-]+$/.test(arg) ? arg : `'${arg.replace(/'/g, "'\\''")}'`;
+
 /** `- [Title](path)` lines for `--md` output. */
 function mdLines(
   graph: Graph,
@@ -427,7 +431,9 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
         process.stderr.write(`${shown} is up to date.\n`);
         return 0;
       }
-      process.stderr.write(`${shown} is stale. Run: okph readme ${shown} --write\n`);
+      process.stderr.write(
+        `${shown} is stale. Run: okph readme ${terminalSafe(shellArg(target))} --write\n`
+      );
       return 1;
     }
     if (!values.write) {
