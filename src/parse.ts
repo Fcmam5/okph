@@ -61,7 +61,7 @@ export function splitFrontmatter(content: string): {
   malformed: boolean;
 } {
   const match = FRONTMATTER_RE.exec(content);
-  if (!match) return { frontmatter: {}, body: content, malformed: false };
+  if (!match) return { frontmatter: Object.create(null), body: content, malformed: false };
   const body = content.slice(match[0].length);
   try {
     // logLevel "silent": yaml otherwise prints warnings, with the raw source
@@ -77,7 +77,7 @@ export function splitFrontmatter(content: string): {
   } catch {
     // Malformed frontmatter is reported via `malformed`, never thrown.
   }
-  return { frontmatter: {}, body, malformed: true };
+  return { frontmatter: Object.create(null), body, malformed: true };
 }
 
 /**

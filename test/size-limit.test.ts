@@ -61,6 +61,20 @@ describe("mapLimit", () => {
     expect(out).toEqual(items.map((n) => n * 2));
   });
 
+  it("stops starting new calls after one rejects", async () => {
+    let started = 0;
+    await expect(
+      mapLimit(Array.from({ length: 200 }, (_, i) => i), 2, async (n) => {
+        started++;
+        await new Promise((resolve) => setImmediate(resolve));
+        if (n === 1) throw new Error("boom");
+        return n;
+      })
+    ).rejects.toThrow("boom");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(started).toBeLessThan(20);
+  });
+
   it("rejects when a call rejects", async () => {
     await expect(
       mapLimit([1, 2, 3], 2, async (n) => {

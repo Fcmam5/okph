@@ -328,8 +328,10 @@ export async function run(argv: string[], cwd: string = process.cwd()): Promise<
         const { graph, seeds } = await seedGraph(root, changed);
         // includeNav: a broken link in index.md/log.md is still a finding.
         scope = seeds.length > 0 ? getAffected(graph, seeds, { includeNav: true }) : [];
-      } catch {
-        process.stderr.write("Could not scope to changed docs; validating the whole bundle.\n");
+      } catch (err) {
+        process.stderr.write(
+          `Could not scope to changed docs (${terminalSafe(err instanceof Error ? err.message : String(err))}); validating the whole bundle.\n`
+        );
       }
     }
     const { diagnostics, version, errorCount, warningCount, docCount, scopedCount } =

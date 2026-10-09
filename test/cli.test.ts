@@ -331,6 +331,7 @@ describe("validate --git", () => {
       expect(code).toBe(1);
       expect(stdout).toContain("big.md  [error] file-too-large");
       expect(stderr).toContain("validating the whole bundle");
+      expect(stderr).toContain("File too large: big.md");
     } finally {
       await rm(big, { force: true });
     }
@@ -443,7 +444,10 @@ describe("errorLine", () => {
     expect(line.endsWith("\n")).toBe(true);
   });
 
-  it("covers filesystem errors that carry a hostile directory name", async () => {
+  // Windows rejects control characters in names and ignores chmod; root ignores mode bits.
+  it.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+    "covers filesystem errors that carry a hostile directory name",
+    async () => {
     const bundle = await mkdtemp(path.join(tmpdir(), "okph-hostile-"));
     const hostile = path.join(bundle, "x\u001b[31mEVIL");
     try {
@@ -460,7 +464,8 @@ describe("errorLine", () => {
       await chmod(hostile, 0o755).catch(() => {});
       await rm(bundle, { recursive: true, force: true });
     }
-  });
+  }
+  );
 });
 
 describe("--md output", () => {

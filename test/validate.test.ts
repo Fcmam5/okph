@@ -329,7 +329,8 @@ describe("validate scope", () => {
   });
 });
 
-describe("validate symlink containment", () => {
+// Creating symlinks needs elevated rights on Windows.
+describe.skipIf(process.platform === "win32")("validate symlink containment", () => {
   let outside: string;
   let bundle: string;
 

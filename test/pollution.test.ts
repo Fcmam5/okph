@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { getAffected, loadGraph, renderMermaid, validate } from "../src/index.js";
+import { getAffected, loadGraph, parseDoc, renderMermaid, validate } from "../src/index.js";
 import { buildGraph } from "../src/graph.js";
 
 /** Run `fn` with `Object.prototype` polluted, always restoring it afterwards. */
@@ -43,6 +43,14 @@ describe("polluted Object.prototype is not a gadget", () => {
   it("validate does not read frontmatter fields from the prototype", async () => {
     const r = await polluted({ type: "T" }, () => validate(dir));
     expect(r.diagnostics.map((d) => `${d.kind}:${d.path}`)).toContain("missing-type:a.md");
+  });
+
+  it("parseDoc ignores an inherited title for docs without usable frontmatter", async () => {
+    const titles = await polluted({ title: "spoofed" }, () => [
+      parseDoc("no heading here", "plain.md").title,
+      parseDoc("---\n[: bad\n---\nbody", "broken.md").title,
+    ]);
+    expect(titles).toEqual(["plain", "broken"]);
   });
 
   it("loadGraph ignores inherited exclude and extraPaths", async () => {
