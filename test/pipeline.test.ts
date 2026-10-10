@@ -31,3 +31,16 @@ describe("generateMermaid", () => {
     expect(out).not.toContain('["Orphan"]');
   });
 });
+
+describe("generateMermaid on a single file", () => {
+  it("renders the neighborhood of a known document", async () => {
+    const out = await generateMermaid(path.join(fixtures, "a.md"));
+    expect(out).toContain('["A"]');
+  });
+
+  it("throws for a file that is not a discovered markdown document", async () => {
+    await expect(generateMermaid(path.resolve(import.meta.dirname, "../package.json"))).rejects.toThrow(
+      /Not a known document/
+    );
+  });
+});

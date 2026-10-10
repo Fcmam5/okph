@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-09
+
+### Added
+
+- `okph readme <file.md>` — inject a generated Mermaid graph between `<!-- okph:start -->` / `<!-- okph:end -->` marker lines. Prints the updated file by default; `--write` rewrites it in place (atomic, symlinks refused); `--check` exits `1` when the block is stale. Supports `--root`, `--base-url`, `--allow-large`. Missing or malformed markers are an error and change nothing.
+
+- `validate --git <base>` — opt-in scoping for PR checks. The whole bundle is still scanned and every error is reported; warnings are limited to documents changed or deleted since `<base>` and their dependents (`orphan`, `recommended-index` and `okf-version-*` are always kept). Links from `index.md`/`log.md` count when computing dependents. Prints a `Scoped to N of M docs` line on stderr, fails on git errors, and falls back to validating the whole bundle if scoping fails (e.g. an oversized file). Library: `validate(root, { scope })`, and `ValidateResult` gains `docCount` and `scopedCount`.
+
 ### Security
 
 - Frontmatter parsing no longer lets the `yaml` library print warnings to stderr. For an unknown tag (e.g. `x: !foo ...`) it echoed the raw source line, so control characters in a document reached the terminal or CI log unsanitized.
@@ -16,10 +24,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--md` output escapes `&`, `<` and `>` in document titles, so a title can't inject raw HTML into the generated markdown.
 - Options (`ignore`, `scope`, `exclude`, `extraPaths`, `baseUrl`, `includeNav`, ...) and frontmatter fields are no longer read through the prototype chain. A polluted `Object.prototype` elsewhere in a host process could previously hide validation errors (`type`), widen or narrow scope, or redirect Mermaid click links to another origin (`baseUrl`) for library users.
 - Reading a bundle now opens at most 32 files at once instead of all of them at once, avoiding file-descriptor exhaustion on large bundles.
-
-### Added
-
-- `validate --git <base>` — opt-in scoping for PR checks. The whole bundle is still scanned and every error is reported; warnings are limited to documents changed or deleted since `<base>` and their dependents (`orphan`, `recommended-index` and `okf-version-*` are always kept). Links from `index.md`/`log.md` count when computing dependents. Prints a `Scoped to N of M docs` line on stderr, fails on git errors, and falls back to validating the whole bundle if scoping fails (e.g. an oversized file). Library: `validate(root, { scope })`, and `ValidateResult` gains `docCount` and `scopedCount`.
 
 ### Changed
 

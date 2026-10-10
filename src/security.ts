@@ -50,8 +50,9 @@ export function safeHref(raw: string, baseUrl?: string): string | null {
 
   // Absolute URL: require `scheme://`. A bare `https:foo` is a legitimate
   // filename, and `new URL("https:evil.com")` would parse it as a cross-origin
-  // link — so only the explicit `//` form counts as absolute.
-  if (/^https?:\/\//i.test(target)) {
+  // link — so only the explicit `//` form counts as absolute, and only the
+  // allow-listed schemes are accepted.
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(target)) {
     try {
       const parsed = new URL(target);
       return ALLOWED_SCHEMES.has(parsed.protocol) ? parsed.href : null;

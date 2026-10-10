@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import { chmod, mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, stat, symlink, writeFile, rm } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { run, errorLine } from "../bin/okph.js";
+import { capture } from "./helpers.js";
 import { MAX_DOC_BYTES } from "../src/limits.js";
 
 let repo: string;
@@ -30,23 +31,6 @@ beforeAll(async () => {
 });
 
 afterAll(() => rm(repo, { recursive: true, force: true }));
-
-/** Run the CLI with both streams captured. */
-async function capture(argv: string[], at: string) {
-  const out = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
-  const err = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-  try {
-    const code = await run(argv, at);
-    return {
-      code,
-      stdout: out.mock.calls.map((c) => String(c[0])).join(""),
-      stderr: err.mock.calls.map((c) => String(c[0])).join(""),
-    };
-  } finally {
-    out.mockRestore();
-    err.mockRestore();
-  }
-}
 
 describe("run", () => {
   it("does not execute on import", () => {
@@ -479,6 +463,148 @@ describe("--md output", () => {
       expect(stdout).toContain("&lt;img src=x onerror=alert(1)&gt; a&amp;b");
     } finally {
       await rm(bundle, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("readme", () => {
+  let dir: string;
+  const readme = () => path.join(dir, "README.md");
+  const MARKED = "# R\n\n<!-- okph:start -->\nstale\n<!-- okph:end -->\n\nbye\n";
+
+  beforeAll(async () => {
+    dir = await mkdtemp(path.join(tmpdir(), "okph-readme-"));
+    await mkdir(path.join(dir, "docs"));
+    await writeFile(path.join(dir, "docs", "a.md"), "# A\n\n[b](b.md)\n");
+    await writeFile(path.join(dir, "docs", "b.md"), "# B\n");
+  });
+
+  afterAll(() => rm(dir, { recursive: true, force: true }));
+
+  const reset = (content = MARKED) => writeFile(readme(), content);
+
+  it("prints the updated README and leaves the file alone by default", async () => {
+    await reset();
+    const { code, stdout } = await capture(["readme", "README.md", "--root", "docs"], dir);
+    expect(code).toBe(0);
+    expect(stdout).toContain("<!-- okph:start -->\n```mermaid\ngraph TD");
+    expect(stdout).toContain("bye\n");
+    expect(await readFile(readme(), "utf8")).toBe(MARKED);
+  });
+
+  it("--write updates the file, then reports it unchanged", async () => {
+    await reset();
+    const first = await capture(["readme", "README.md", "--root", "docs", "--write"], dir);
+    expect(first.code).toBe(0);
+    expect(first.stdout).toBe("");
+    expect(await readFile(readme(), "utf8")).toContain("```mermaid");
+    const second = await capture(["readme", "README.md", "--root", "docs", "--write"], dir);
+    expect(second.stderr).toContain("already up to date");
+  });
+
+  it("--check fails on a stale block without writing, and passes once updated", async () => {
+    await reset();
+    const stale = await capture(["readme", "README.md", "--root", "docs", "--check"], dir);
+    expect(stale.code).toBe(1);
+    expect(stale.stderr).toContain("README.md is stale");
+    expect(stale.stderr).toContain("--write");
+    expect(await readFile(readme(), "utf8")).toBe(MARKED);
+    await capture(["readme", "README.md", "--root", "docs", "--write"], dir);
+    const fresh = await capture(["readme", "README.md", "--root", "docs", "--check"], dir);
+    expect(fresh.code).toBe(0);
+  });
+
+  it.skipIf(process.platform === "win32")("--write keeps the file's permission bits", async () => {
+    await reset();
+    await chmod(readme(), 0o640);
+    await capture(["readme", "README.md", "--root", "docs", "--write"], dir);
+    expect((await stat(readme())).mode & 0o777).toBe(0o640);
+    expect(await readFile(readme(), "utf8")).toContain("```mermaid");
+  });
+
+  it("leaves no temp file behind after --write", async () => {
+    await reset();
+    await capture(["readme", "README.md", "--root", "docs", "--write"], dir);
+    const { readdir } = await import("node:fs/promises");
+    expect((await readdir(dir)).filter((f) => f.includes(".tmp"))).toEqual([]);
+  });
+
+  it("quotes a path with spaces in the suggested --write command", async () => {
+    const spaced = path.join(dir, "my notes.md");
+    await writeFile(spaced, MARKED);
+    const { stderr } = await capture(["readme", "my notes.md", "--root", "docs", "--check"], dir);
+    expect(stderr).toContain("okph readme 'my notes.md' --write");
+    await rm(spaced);
+  });
+
+  it("applies --base-url to click links", async () => {
+    await reset();
+    const { stdout } = await capture(
+      ["readme", "README.md", "--root", "docs", "--base-url", "https://example.com/docs"],
+      dir
+    );
+    expect(stdout).toContain('"https://example.com/docs/a.md"');
+  });
+
+  it("errors and changes nothing when markers are missing", async () => {
+    await reset("# no markers\n");
+    await expect(capture(["readme", "README.md", "--write"], dir)).rejects.toThrow(/markers found/);
+    expect(await readFile(readme(), "utf8")).toBe("# no markers\n");
+  });
+
+  it("rejects --write together with --check", async () => {
+    await reset();
+    const { code, stderr } = await capture(["readme", "README.md", "--write", "--check"], dir);
+    expect(code).toBe(1);
+    expect(stderr).toContain("--write and --check cannot be combined");
+  });
+
+  it("rejects --write and --check on other commands", async () => {
+    for (const flag of ["--write", "--check"]) {
+      const { code, stderr } = await capture(["deps", "docs/a.md", flag], dir);
+      expect(code).toBe(1);
+      expect(stderr).toContain(`${flag} is only supported by the readme command`);
+    }
+  });
+
+  it("refuses a non-markdown, missing or oversized README", async () => {
+    await writeFile(path.join(dir, "notes.txt"), "x");
+    const txt = await capture(["readme", "notes.txt"], dir);
+    expect(txt.code).toBe(1);
+    expect(txt.stderr).toContain("is not a markdown file");
+    const missing = await capture(["readme", "nope.md"], dir);
+    expect(missing.code).toBe(1);
+    expect(missing.stderr).toContain("does not exist");
+    await writeFile(path.join(dir, "big.md"), "x".repeat(MAX_DOC_BYTES + 1));
+    const big = await capture(["readme", "big.md"], dir);
+    expect(big.code).toBe(1);
+    expect(big.stderr).toContain("exceeds");
+  });
+
+  it.skipIf(process.platform === "win32")("refuses to follow a symlinked README", async () => {
+    await reset();
+    await symlink(readme(), path.join(dir, "LINK.md"));
+    const { code, stderr } = await capture(["readme", "LINK.md", "--write"], dir);
+    expect(code).toBe(1);
+    expect(stderr).toContain("symlink");
+  });
+
+  it("cannot be tricked into forging markers through a document title", async () => {
+    const hostile = await mkdtemp(path.join(tmpdir(), "okph-readme-evil-"));
+    try {
+      await writeFile(
+        path.join(hostile, "a.md"),
+        '---\ntitle: "x <!-- okph:end --> ```\\n<!-- okph:start -->"\n---\n# A\n'
+      );
+      await writeFile(path.join(hostile, "README.md"), MARKED);
+      await capture(["readme", "README.md", "--write"], hostile);
+      const out = await readFile(path.join(hostile, "README.md"), "utf8");
+      expect(out.match(/<!-- okph:start -->/g)).toHaveLength(1);
+      expect(out.match(/<!-- okph:end -->/g)).toHaveLength(1);
+      const check = await capture(["readme", "README.md", "--check"], hostile);
+      expect(check.code).toBe(0);
+    } finally {
+      await rm(hostile, { recursive: true, force: true });
     }
   });
 });

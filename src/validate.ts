@@ -1,6 +1,6 @@
 import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
-import { marked } from "marked";
+import { marked, type Tokens } from "marked";
 import { discover, isReservedFile } from "./discover.js";
 import { MAX_DOC_BYTES } from "./limits.js";
 import { parseDoc, splitFrontmatter } from "./parse.js";
@@ -245,7 +245,7 @@ export async function validate(
     (a, b) =>
       a.path.localeCompare(b.path) ||
       a.kind.localeCompare(b.kind) ||
-      (a.target ?? "").localeCompare(b.target ?? "")
+      targetOf(a).localeCompare(targetOf(b))
   );
   const errorCount = deduped.filter((d) => d.level === "error").length;
   return {
@@ -420,8 +420,8 @@ function checkLog(body: string, rel: string, out: Diagnostic[]): void {
   let titleSeen = false;
   for (const t of tokens) {
     if (t.type !== "heading") continue;
-    const depth = (t as { depth?: number }).depth;
-    const text = String((t as { text?: unknown }).text ?? "").trim();
+    const depth = (t as Tokens.Heading).depth;
+    const text = (t as Tokens.Heading).text.trim();
     if (!titleSeen && depth === 1 && !LOG_DATE_RE.test(text)) {
       titleSeen = true;
       continue;
@@ -496,11 +496,13 @@ async function resolveVersion(
   return version;
 }
 
+const targetOf = (d: Diagnostic) => d.target ?? "";
+
 /** Drop repeated findings with the same (path, kind, target). */
 function dedupe(diagnostics: Diagnostic[]): Diagnostic[] {
   const seen = new Set<string>();
   return diagnostics.filter((d) => {
-    const key = `${d.path}\0${d.kind}\0${d.target ?? ""}`;
+    const key = `${d.path}\0${d.kind}\0${targetOf(d)}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

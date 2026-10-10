@@ -2,8 +2,8 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { generateMermaid, loadGraph, MAX_DOC_BYTES } from "../src/index.js";
-import { mapLimit } from "../src/limits.js";
+import { generateMermaid, loadGraph, MAX_DOC_BYTES } from "../../src/index.js";
+import { mapLimit } from "../../src/limits.js";
 
 let tmpDir: string;
 
@@ -82,5 +82,21 @@ describe("mapLimit", () => {
         return n;
       })
     ).rejects.toThrow("boom");
+  });
+});
+
+describe("mapLimit edge cases", () => {
+  it("returns an empty array for no items", async () => {
+    expect(await mapLimit([], 4, async (n: number) => n)).toEqual([]);
+  });
+
+  it("runs sequentially with a limit of 1", async () => {
+    const order: number[] = [];
+    await mapLimit([1, 2, 3], 1, async (n) => {
+      order.push(n);
+      await new Promise((resolve) => setImmediate(resolve));
+      order.push(-n);
+    });
+    expect(order).toEqual([1, -1, 2, -2, 3, -3]);
   });
 });
